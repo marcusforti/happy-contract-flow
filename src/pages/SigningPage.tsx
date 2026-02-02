@@ -1,16 +1,15 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ChevronDown } from 'lucide-react';
+import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ArrowRight, ArrowLeft, User, Mail, ShieldCheck, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Contract {
   id: string;
@@ -34,9 +33,7 @@ type Step = 'reading' | 'signing';
 
 export default function SigningPage() {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
-  const documentEndRef = useRef<HTMLDivElement>(null);
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +43,6 @@ export default function SigningPage() {
   const [typedSignature, setTypedSignature] = useState('');
   const [error, setError] = useState<string | null>(null);
   
-  // New state for two-step flow
   const [step, setStep] = useState<Step>('reading');
   const [hasReadDocument, setHasReadDocument] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -58,7 +54,6 @@ export default function SigningPage() {
     }
   }, [token]);
 
-  // Load PDF when contract is available
   useEffect(() => {
     if (contract?.file_path) {
       loadPdfDocument();
@@ -72,7 +67,7 @@ export default function SigningPage() {
     try {
       const { data } = await supabase.storage
         .from('contracts')
-        .createSignedUrl(contract.file_path, 3600); // 1 hour expiry
+        .createSignedUrl(contract.file_path, 3600);
       
       if (data?.signedUrl) {
         setPdfUrl(data.signedUrl);
@@ -84,7 +79,6 @@ export default function SigningPage() {
   };
 
   const fetchSigningData = async () => {
-    // Find signatory by access token
     const { data: signatoryData, error: signatoryError } = await supabase
       .from('contract_signatories')
       .select('*')
@@ -105,7 +99,6 @@ export default function SigningPage() {
 
     setSignatory(signatoryData);
 
-    // Fetch contract
     const { data: contractData, error: contractError } = await supabase
       .from('contracts')
       .select('id, title, description, status, owner_id, document_hash, file_path')
@@ -133,7 +126,6 @@ export default function SigningPage() {
     setContract(contractData);
     setLoading(false);
 
-    // Log view action (using edge function would be better for IP)
     await supabase.from('audit_logs').insert({
       contract_id: contractData.id,
       signatory_id: signatoryData.id,
@@ -155,7 +147,6 @@ export default function SigningPage() {
       return;
     }
     setStep('signing');
-    // Scroll to top when transitioning
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -181,7 +172,6 @@ export default function SigningPage() {
     setSubmitting(true);
 
     try {
-      // Create signature field if doesn't exist (simplified - normally would be positioned by owner)
       const { data: field, error: fieldError } = await supabase
         .from('signature_fields')
         .insert({
@@ -202,7 +192,6 @@ export default function SigningPage() {
         return;
       }
 
-      // Save signature
       const { error: signatureError } = await supabase
         .from('signatures')
         .insert({
@@ -220,13 +209,11 @@ export default function SigningPage() {
         return;
       }
 
-      // Update signatory as signed
       await supabase
         .from('contract_signatories')
         .update({ signed_at: new Date().toISOString() })
         .eq('id', signatory.id);
 
-      // Log signing action
       await supabase.from('audit_logs').insert({
         contract_id: contract.id,
         signatory_id: signatory.id,
@@ -236,7 +223,6 @@ export default function SigningPage() {
         metadata: { signature_type: signatureType },
       });
 
-      // Check if all signatories have signed
       const { data: allSignatories } = await supabase
         .from('contract_signatories')
         .select('signed_at')
@@ -245,7 +231,6 @@ export default function SigningPage() {
       const allSigned = allSignatories?.every(s => s.signed_at);
       const remainingCount = allSignatories?.filter(s => !s.signed_at).length || 0;
 
-      // 1. Send signature confirmation to the signatory (with contract PDF attached if available)
       try {
         const signedAtFormatted = new Date().toLocaleString('pt-BR', { 
           dateStyle: 'short', 
@@ -260,14 +245,13 @@ export default function SigningPage() {
             signedAt: signedAtFormatted,
             remainingSignatories: remainingCount,
             isLastSignature: allSigned,
-            filePath: contract.file_path, // Pass file path for attachment
+            filePath: contract.file_path,
           },
         });
       } catch (emailErr) {
         console.error('Error sending signature confirmation:', emailErr);
       }
 
-      // 2. Notify contract owner about the new signature
       try {
         await supabase.functions.invoke('notify-owner-signature', {
           body: {
@@ -293,24 +277,18 @@ export default function SigningPage() {
           user_agent: navigator.userAgent,
         });
 
-        // 3. Send completion email to contract owner
         try {
-          const { data: notifyData, error: notifyError } = await supabase.functions.invoke('send-owner-completion-email', {
+          await supabase.functions.invoke('send-owner-completion-email', {
             body: {
               contractId: contract.id,
               accessToken: token,
               origin: window.location.origin,
             },
           });
-
-          if (notifyError || !notifyData?.success) {
-            console.error('Owner completion email failed:', notifyError || notifyData?.error);
-          }
         } catch (emailErr) {
           console.error('Error sending owner completion email:', emailErr);
         }
 
-        // 4. Send completion emails to ALL signatories
         try {
           await supabase.functions.invoke('send-all-completion-emails', {
             body: {
@@ -323,7 +301,6 @@ export default function SigningPage() {
           console.error('Error sending all completion emails:', emailErr);
         }
       } else {
-        // Update to partially signed if not all signed
         await supabase
           .from('contracts')
           .update({ status: 'partially_signed' })
@@ -343,27 +320,54 @@ export default function SigningPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 gold-border">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+          <p className="text-muted-foreground">Carregando documento...</p>
+        </motion.div>
       </div>
     );
   }
 
   if (error) {
+    const isSuccess = error.includes('sucesso');
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Card className="max-w-md w-full card-premium gold-border">
-          <CardContent className="pt-6 text-center">
-            {error.includes('sucesso') ? (
-              <Check className="h-12 w-12 mx-auto text-emerald-500 mb-4" />
-            ) : (
-              <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
-            )}
-            <h2 className="text-xl font-semibold mb-2">
-              {error.includes('sucesso') ? 'Concluído!' : 'Ops!'}
-            </h2>
-            <p className="text-muted-foreground">{error}</p>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <Card className="card-premium gold-border overflow-hidden">
+            <div className={`h-2 ${isSuccess ? 'bg-emerald-500' : 'bg-destructive'}`} />
+            <CardContent className="pt-8 pb-8 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", delay: 0.2 }}
+              >
+                {isSuccess ? (
+                  <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                    <Check className="h-8 w-8 text-emerald-500" />
+                  </div>
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="h-8 w-8 text-destructive" />
+                  </div>
+                )}
+              </motion.div>
+              <h2 className="text-2xl font-bold mb-2">
+                {isSuccess ? 'Concluído!' : 'Ops!'}
+              </h2>
+              <p className="text-muted-foreground">{error}</p>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     );
   }
@@ -371,235 +375,366 @@ export default function SigningPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-primary/20 bg-card sticky top-0 z-50">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center gold-border">
-              <Scale className="h-5 w-5 text-primary" />
+      <header className="border-b border-primary/20 bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center gold-border">
+                <Scale className="h-5 w-5 text-primary" />
+              </div>
+              <div className="hidden sm:block">
+                <span className="text-lg font-bold gold-text">Regozoni Docs</span>
+              </div>
             </div>
-            <span className="text-xl font-bold gold-text">Regozoni Docs</span>
-          </div>
-          
-          {/* Step indicator */}
-          <div className="flex items-center gap-2 text-sm">
-            <span className={`px-3 py-1 rounded-full ${step === 'reading' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-              1. Leitura
-            </span>
-            <ChevronDown className="h-4 w-4 rotate-[-90deg] text-muted-foreground" />
-            <span className={`px-3 py-1 rounded-full ${step === 'signing' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-              2. Assinatura
-            </span>
+            
+            {/* Step Progress */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
+                step === 'reading' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-primary/20 text-primary'
+              }`}>
+                <FileText className="h-4 w-4" />
+                <span className="text-sm font-medium hidden sm:inline">Leitura</span>
+                <span className="text-sm font-medium sm:hidden">1</span>
+              </div>
+              <div className="w-6 h-0.5 bg-primary/30" />
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
+                step === 'signing' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                <Pen className="h-4 w-4" />
+                <span className="text-sm font-medium hidden sm:inline">Assinatura</span>
+                <span className="text-sm font-medium sm:hidden">2</span>
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto max-w-4xl px-4 py-8">
-        {/* Contract Info - Always visible */}
-        <Card className="mb-6 card-premium">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              {contract?.title}
-            </CardTitle>
-            {contract?.description && (
-              <CardDescription>{contract.description}</CardDescription>
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/50 rounded-lg p-4 gold-border">
-              <p className="text-sm text-muted-foreground mb-1">Assinando como:</p>
-              <p className="font-medium">{signatory?.name}</p>
-              <p className="text-sm text-muted-foreground">{signatory?.email}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Step 1: Reading */}
-        {step === 'reading' && (
-          <div className="space-y-6">
-            {/* PDF Viewer */}
-            <Card className="card-premium gold-border overflow-hidden">
-              <CardHeader className="bg-muted/30">
-                <CardTitle className="text-lg">Documento para Revisão</CardTitle>
-                <CardDescription>
-                  Leia atentamente o documento abaixo antes de prosseguir para a assinatura
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                {loadingPdf ? (
-                  <div className="flex items-center justify-center h-[600px] bg-muted/20">
-                    <div className="text-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Carregando documento...</p>
+      <main className="container mx-auto max-w-4xl px-4 py-6 md:py-8">
+        <AnimatePresence mode="wait">
+          {step === 'reading' ? (
+            <motion.div
+              key="reading"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6"
+            >
+              {/* Contract Header Card */}
+              <Card className="card-premium overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-primary to-primary/50" />
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row md:items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-primary text-sm font-medium mb-2">
+                        <FileText className="h-4 w-4" />
+                        Documento para Assinatura
+                      </div>
+                      <h1 className="text-xl md:text-2xl font-bold mb-2">{contract?.title}</h1>
+                      {contract?.description && (
+                        <p className="text-muted-foreground text-sm">{contract.description}</p>
+                      )}
+                    </div>
+                    
+                    {/* Signatory Info */}
+                    <div className="bg-muted/50 rounded-xl p-4 gold-border min-w-[200px]">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Assinante</p>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="font-medium text-sm">{signatory?.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <span className="text-xs text-muted-foreground truncate">{signatory?.email}</span>
+                      </div>
                     </div>
                   </div>
-                ) : pdfUrl ? (
-                  <div className="relative">
+                </CardContent>
+              </Card>
+
+              {/* PDF Viewer */}
+              <Card className="card-premium gold-border overflow-hidden">
+                <CardHeader className="bg-muted/30 border-b border-border py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Documento</CardTitle>
+                      <CardDescription className="text-xs">
+                        Leia atentamente antes de assinar
+                      </CardDescription>
+                    </div>
+                    {pdfUrl && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.open(pdfUrl, '_blank')}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span className="hidden sm:inline">Baixar PDF</span>
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loadingPdf ? (
+                    <div className="flex items-center justify-center h-[500px] md:h-[600px] bg-muted/10">
+                      <div className="text-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">Carregando documento...</p>
+                      </div>
+                    </div>
+                  ) : pdfUrl ? (
                     <iframe
-                      src={`${pdfUrl}#view=FitH`}
-                      className="w-full h-[600px] md:h-[700px] border-0"
+                      src={`${pdfUrl}#view=FitH&toolbar=0&navpanes=0`}
+                      className="w-full h-[500px] md:h-[650px] border-0"
                       title="Documento para assinatura"
                     />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-[400px] bg-muted/20">
-                    <div className="text-center">
-                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-muted-foreground">Documento não disponível para visualização</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Verifique o anexo do email ou entre em contato com o remetente
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Confirmation Section */}
-            <Card className="card-premium gold-border" ref={documentEndRef}>
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg mb-6">
-                  <Checkbox
-                    id="read-confirmation"
-                    checked={hasReadDocument}
-                    onCheckedChange={(checked) => setHasReadDocument(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <label
-                    htmlFor="read-confirmation"
-                    className="text-sm leading-relaxed cursor-pointer select-none"
-                  >
-                    <span className="font-medium">Li e compreendi os termos deste documento.</span>
-                    <br />
-                    <span className="text-muted-foreground">
-                      Declaro que revisei todas as cláusulas e condições apresentadas e estou de acordo em prosseguir para a assinatura eletrônica.
-                    </span>
-                  </label>
-                </div>
-
-                <Button
-                  className="w-full btn-gold"
-                  size="lg"
-                  onClick={handleProceedToSigning}
-                  disabled={!hasReadDocument}
-                >
-                  <Pen className="h-4 w-4 mr-2" />
-                  Prosseguir para Assinatura
-                </Button>
-
-                {!hasReadDocument && (
-                  <p className="text-xs text-muted-foreground text-center mt-3">
-                    Marque a confirmação acima para habilitar o botão
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Step 2: Signing */}
-        {step === 'signing' && (
-          <Card className="card-premium gold-border">
-            <CardHeader>
-              <CardTitle>Sua Assinatura</CardTitle>
-              <CardDescription>
-                Escolha como deseja assinar o documento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={signatureType} onValueChange={(v) => setSignatureType(v as 'draw' | 'type')}>
-                <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted">
-                  <TabsTrigger value="draw" className="flex items-center gap-2">
-                    <Pen className="h-4 w-4" />
-                    Desenhar
-                  </TabsTrigger>
-                  <TabsTrigger value="type" className="flex items-center gap-2">
-                    <Type className="h-4 w-4" />
-                    Digitar
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="draw">
-                  <div className="border rounded-lg bg-white overflow-hidden">
-                    <SignatureCanvas
-                      ref={signatureCanvasRef}
-                      canvasProps={{
-                        className: 'w-full h-48 cursor-crosshair',
-                        style: { width: '100%', height: '192px' }
-                      }}
-                      backgroundColor="white"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={clearSignature}
-                    className="mt-2"
-                  >
-                    Limpar
-                  </Button>
-                </TabsContent>
-
-                <TabsContent value="type">
-                  <div className="space-y-4">
-                    <Input
-                      placeholder="Digite seu nome completo"
-                      value={typedSignature}
-                      onChange={(e) => setTypedSignature(e.target.value)}
-                      className="text-xl"
-                    />
-                    {typedSignature && (
-                      <div className="border rounded-lg p-6 bg-white text-center">
-                        <p 
-                          className="text-3xl text-gray-900"
-                          style={{ fontFamily: "'Dancing Script', cursive" }}
-                        >
-                          {typedSignature}
+                  ) : (
+                    <div className="flex items-center justify-center h-[300px] bg-muted/10">
+                      <div className="text-center px-4">
+                        <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                          <FileText className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground font-medium mb-1">Documento não disponível</p>
+                        <p className="text-xs text-muted-foreground">
+                          Verifique o anexo do email ou entre em contato com o remetente
                         </p>
                       </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-              <div className="mt-6 pt-6 border-t border-primary/20">
-                <p className="text-xs text-muted-foreground mb-4">
-                  Ao clicar em "Assinar documento", você concorda que sua assinatura eletrônica 
-                  será legalmente vinculante, com o mesmo valor de uma assinatura manuscrita.
-                </p>
-                
-                <div className="flex gap-3">
-                  <Button 
-                    variant="outline"
-                    size="lg"
-                    onClick={() => setStep('reading')}
-                    className="flex-1"
-                  >
-                    Voltar ao Documento
-                  </Button>
-                  <Button 
-                    className="flex-1 btn-gold" 
-                    size="lg"
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    Assinar documento
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              {/* Confirmation Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Card className="card-premium gold-border">
+                  <CardContent className="pt-6">
+                    {/* Terms Checkbox */}
+                    <div 
+                      className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                        hasReadDocument 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border bg-muted/30 hover:border-primary/50'
+                      }`}
+                      onClick={() => setHasReadDocument(!hasReadDocument)}
+                    >
+                      <Checkbox
+                        id="read-confirmation"
+                        checked={hasReadDocument}
+                        onCheckedChange={(checked) => setHasReadDocument(checked === true)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <label
+                          htmlFor="read-confirmation"
+                          className="font-medium cursor-pointer block mb-1"
+                        >
+                          Li e compreendi os termos deste documento
+                        </label>
+                        <p className="text-sm text-muted-foreground">
+                          Declaro que revisei todas as cláusulas e condições apresentadas e estou de acordo em prosseguir para a assinatura eletrônica.
+                        </p>
+                      </div>
+                      {hasReadDocument && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="h-6 w-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0"
+                        >
+                          <Check className="h-4 w-4 text-primary-foreground" />
+                        </motion.div>
+                      )}
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="mt-6">
+                      <Button
+                        className="w-full btn-gold h-12 text-base"
+                        onClick={handleProceedToSigning}
+                        disabled={!hasReadDocument}
+                      >
+                        Prosseguir para Assinatura
+                        <ArrowRight className="h-5 w-5 ml-2" />
+                      </Button>
+                      
+                      {!hasReadDocument && (
+                        <p className="text-xs text-muted-foreground text-center mt-3 flex items-center justify-center gap-1">
+                          <ShieldCheck className="h-3 w-3" />
+                          Marque a confirmação acima para continuar
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="signing"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6"
+            >
+              {/* Signing Header */}
+              <Card className="card-premium overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-primary to-primary/50" />
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center gold-border">
+                      <Pen className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Assine o Documento</h2>
+                      <p className="text-sm text-muted-foreground">{contract?.title}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Signature Card */}
+              <Card className="card-premium gold-border">
+                <CardHeader>
+                  <CardTitle className="text-lg">Sua Assinatura</CardTitle>
+                  <CardDescription>
+                    Escolha como deseja assinar o documento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Tabs value={signatureType} onValueChange={(v) => setSignatureType(v as 'draw' | 'type')}>
+                    <TabsList className="grid w-full grid-cols-2 mb-6 h-12 bg-muted p-1">
+                      <TabsTrigger value="draw" className="flex items-center gap-2 h-10 data-[state=active]:bg-background">
+                        <Pen className="h-4 w-4" />
+                        Desenhar
+                      </TabsTrigger>
+                      <TabsTrigger value="type" className="flex items-center gap-2 h-10 data-[state=active]:bg-background">
+                        <Type className="h-4 w-4" />
+                        Digitar
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="draw" className="mt-0">
+                      <div className="space-y-3">
+                      <div className="border-2 border-dashed border-border rounded-xl overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
+                          <SignatureCanvas
+                            ref={signatureCanvasRef}
+                            canvasProps={{
+                              className: 'w-full h-48 cursor-crosshair',
+                              style: { width: '100%', height: '192px' }
+                            }}
+                            backgroundColor="white"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            Desenhe sua assinatura no campo acima
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={clearSignature}
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="type" className="mt-0">
+                      <div className="space-y-4">
+                        <Input
+                          placeholder="Digite seu nome completo"
+                          value={typedSignature}
+                          onChange={(e) => setTypedSignature(e.target.value)}
+                          className="text-lg h-12"
+                        />
+                        <AnimatePresence>
+                          {typedSignature && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 10 }}
+                              className="border-2 border-dashed border-border rounded-xl p-8 text-center" style={{ backgroundColor: '#ffffff' }}
+                            >
+                              <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">
+                                Prévia da assinatura
+                              </p>
+                              <p 
+                                className="text-3xl md:text-4xl"
+                                style={{ fontFamily: "'Dancing Script', cursive", color: '#1a1a1a' }}
+                              >
+                                {typedSignature}
+                              </p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
+                  {/* Legal Notice & Actions */}
+                  <div className="mt-8 pt-6 border-t border-border">
+                    <div className="flex items-start gap-3 bg-muted/30 rounded-lg p-3 mb-6">
+                      <ShieldCheck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-muted-foreground">
+                        Ao clicar em "Assinar documento", você concorda que sua assinatura eletrônica 
+                        será legalmente vinculante, com o mesmo valor de uma assinatura manuscrita.
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button 
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setStep('reading')}
+                        className="flex-1 h-12"
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Voltar ao Documento
+                      </Button>
+                      <Button 
+                        className="flex-1 btn-gold h-12" 
+                        size="lg"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                      >
+                        {submitting ? (
+                          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                        ) : (
+                          <Check className="h-5 w-5 mr-2" />
+                        )}
+                        Assinar documento
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground mt-8">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="text-center text-xs text-muted-foreground mt-8 pb-4"
+        >
           Powered by <span className="gold-text font-medium">Regozoni Docs</span>
-        </p>
+        </motion.p>
       </main>
     </div>
   );
