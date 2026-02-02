@@ -411,15 +411,15 @@ export default function Dashboard() {
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="sticky top-0 z-50 border-b border-primary/20 bg-card/95 backdrop-blur-sm"
       >
-        <div className="container mx-auto flex items-center justify-between px-6 py-4">
+        <div className="container mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img 
               src={logoTransparent} 
               alt="Regozoni Docs" 
-              className="h-10 w-auto"
+              className="h-8 sm:h-10 w-auto"
             />
           </Link>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
             <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/20">
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-sm text-muted-foreground">
@@ -432,41 +432,41 @@ export default function Dashboard() {
               onClick={signOut}
               className="text-muted-foreground hover:text-foreground"
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              <LogOut className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Sair</span>
             </Button>
           </div>
         </div>
       </motion.header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {/* Welcome Section */}
         <motion.div 
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="mb-8"
+          className="mb-6 sm:mb-8"
         >
-          <h1 className="text-3xl font-bold mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">
             Olá, <span className="gold-text">{profile?.full_name?.split(' ')[0] || 'Usuário'}</span>
           </h1>
-          <p className="text-muted-foreground">
-            Gerencie seus contratos com total controle e segurança jurídica.
+          <p className="text-sm sm:text-base text-muted-foreground">
+            Gerencie seus contratos com segurança jurídica.
           </p>
         </motion.div>
 
         {/* Stats Cards - Clicáveis */}
         {loadingContracts ? (
-          <div className="grid gap-6 md:grid-cols-3 mb-10">
+          <div className="grid grid-cols-3 gap-2 sm:gap-6 mb-6 sm:mb-10">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="card-premium">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+                <CardContent className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div className="space-y-2">
-                      <div className="h-4 w-24 bg-muted rounded animate-pulse" />
-                      <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+                      <div className="h-3 sm:h-4 w-16 sm:w-24 bg-muted rounded animate-pulse" />
+                      <div className="h-6 sm:h-8 w-10 sm:w-16 bg-muted rounded animate-pulse" />
                     </div>
-                    <div className="h-12 w-12 rounded-lg bg-muted animate-pulse" />
+                    <div className="h-8 w-8 sm:h-12 sm:w-12 rounded-lg bg-muted animate-pulse hidden sm:block" />
                   </div>
                 </CardContent>
               </Card>
@@ -477,7 +477,7 @@ export default function Dashboard() {
             initial="hidden"
             animate="visible"
             variants={containerVariants}
-            className="grid gap-6 md:grid-cols-3 mb-10"
+            className="grid grid-cols-3 gap-2 sm:gap-6 mb-6 sm:mb-10"
           >
             <motion.div variants={itemVariants}>
               <Card 
@@ -486,22 +486,22 @@ export default function Dashboard() {
                 }`}
                 onClick={() => handleStatsClick('all')}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
                   <div className="flex items-center justify-between">
-                    <CardDescription className="text-sm font-medium">Total de contratos</CardDescription>
+                    <CardDescription className="text-[10px] sm:text-sm font-medium">Total</CardDescription>
                     <motion.div 
                       whileHover={{ scale: 1.1, rotate: 5 }}
-                      className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center gold-border"
+                      className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center gold-border"
                     >
-                      <FileSignature className="h-5 w-5 text-primary" />
+                      <FileSignature className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-primary" />
                     </motion.div>
                   </div>
-                  <CardTitle className="text-4xl font-bold gold-text">{stats.total}</CardTitle>
+                  <CardTitle className="text-2xl sm:text-4xl font-bold gold-text">{stats.total}</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="p-3 sm:p-6 pt-0 hidden sm:block">
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-emerald-500" />
-                    Documentos criados
+                    Documentos
                   </p>
                 </CardContent>
               </Card>
@@ -514,22 +514,22 @@ export default function Dashboard() {
                 }`}
                 onClick={() => handleStatsClick('pending_all')}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
                   <div className="flex items-center justify-between">
-                    <CardDescription className="text-sm font-medium">Pendentes</CardDescription>
+                    <CardDescription className="text-[10px] sm:text-sm font-medium">Pendentes</CardDescription>
                     <motion.div 
                       whileHover={{ scale: 1.1, rotate: -5 }}
-                      className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/30"
+                      className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/30"
                     >
-                      <Clock className="h-5 w-5 text-amber-500" />
+                      <Clock className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-amber-500" />
                     </motion.div>
                   </div>
-                  <CardTitle className="text-4xl font-bold text-amber-500">{stats.pending}</CardTitle>
+                  <CardTitle className="text-2xl sm:text-4xl font-bold text-amber-500">{stats.pending}</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="p-3 sm:p-6 pt-0 hidden sm:block">
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Users className="h-3 w-3 text-amber-500" />
-                    Aguardando assinaturas
+                    Aguardando
                   </p>
                 </CardContent>
               </Card>
@@ -542,22 +542,22 @@ export default function Dashboard() {
                 }`}
                 onClick={() => handleStatsClick('completed')}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
                   <div className="flex items-center justify-between">
-                    <CardDescription className="text-sm font-medium">Concluídos</CardDescription>
+                    <CardDescription className="text-[10px] sm:text-sm font-medium">Concluídos</CardDescription>
                     <motion.div 
                       whileHover={{ scale: 1.1, rotate: 5 }}
-                      className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30"
+                      className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30"
                     >
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-emerald-500" />
                     </motion.div>
                   </div>
-                  <CardTitle className="text-4xl font-bold text-emerald-500">{stats.completed}</CardTitle>
+                  <CardTitle className="text-2xl sm:text-4xl font-bold text-emerald-500">{stats.completed}</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="p-3 sm:p-6 pt-0 hidden sm:block">
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                    Totalmente assinados
+                    Assinados
                   </p>
                 </CardContent>
               </Card>
@@ -570,22 +570,22 @@ export default function Dashboard() {
           initial="hidden"
           animate="visible"
           variants={containerVariants}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 mb-6 sm:mb-8"
         >
           <motion.div variants={itemVariants}>
             <Button 
               asChild 
-              className="btn-gold h-14 justify-start px-5 group w-full"
+              className="btn-gold h-11 sm:h-14 justify-start px-4 sm:px-5 group w-full"
             >
               <Link to="/contracts/new">
-                <Plus className="h-5 w-5 mr-3" />
-                <span className="font-medium">Novo Contrato</span>
-                <ArrowRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
+                <span className="font-medium text-sm sm:text-base">Novo Contrato</span>
+                <ArrowRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all hidden sm:block" />
               </Link>
             </Button>
           </motion.div>
           
-          <motion.div variants={itemVariants}>
+          <motion.div variants={itemVariants} className="hidden sm:block">
             <Button 
               variant="outline"
               className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 w-full ${
@@ -594,7 +594,7 @@ export default function Dashboard() {
               onClick={() => handleStatsClick(statusFilter === 'pending_all' ? 'all' : 'pending_all')}
             >
               <Clock className="h-5 w-5 mr-3 text-amber-500" />
-              <span className="font-medium">Contratos Pendentes</span>
+              <span className="font-medium">Pendentes</span>
               {stats.pending > 0 && (
                 <Badge className="ml-auto bg-amber-500/20 text-amber-500 border-amber-500/30">
                   {stats.pending}
@@ -603,7 +603,7 @@ export default function Dashboard() {
             </Button>
           </motion.div>
           
-          <motion.div variants={itemVariants}>
+          <motion.div variants={itemVariants} className="hidden sm:block">
             <Button 
               variant="outline"
               className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 w-full ${
@@ -612,7 +612,7 @@ export default function Dashboard() {
               onClick={() => handleStatsClick(statusFilter === 'completed' ? 'all' : 'completed')}
             >
               <CheckCircle2 className="h-5 w-5 mr-3 text-emerald-500" />
-              <span className="font-medium">Concluídos Recentes</span>
+              <span className="font-medium">Concluídos</span>
               {stats.completed > 0 && (
                 <Badge className="ml-auto bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
                   {stats.completed}
@@ -627,21 +627,21 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.4 }}
-          className="flex flex-col lg:flex-row gap-4 mb-8"
+          className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6 sm:mb-8"
         >
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar contratos..."
+              placeholder="Buscar..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-11 pr-10 h-11 bg-card border-primary/20 focus:border-primary/50"
+              className="pl-9 sm:pl-11 pr-10 h-10 sm:h-11 bg-card border-primary/20 focus:border-primary/50 text-sm"
             />
             {searchTerm && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
                 onClick={clearSearch}
               >
                 <X className="h-4 w-4" />
@@ -649,32 +649,34 @@ export default function Dashboard() {
             )}
           </div>
           
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full lg:w-[180px] h-11 bg-card border-primary/20">
-              <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="draft">Rascunho</SelectItem>
-              <SelectItem value="pending">Aguardando</SelectItem>
-              <SelectItem value="partially_signed">Em andamento</SelectItem>
-              <SelectItem value="completed">Concluído</SelectItem>
-              <SelectItem value="expired">Expirado</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="flex-1 sm:w-[150px] h-10 sm:h-11 bg-card border-primary/20 text-sm">
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="draft">Rascunho</SelectItem>
+                <SelectItem value="pending">Aguardando</SelectItem>
+                <SelectItem value="partially_signed">Em andamento</SelectItem>
+                <SelectItem value="completed">Concluído</SelectItem>
+                <SelectItem value="expired">Expirado</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-            <SelectTrigger className="w-full lg:w-[180px] h-11 bg-card border-primary/20">
-              <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Ordenar" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(sortOptions).map(([value, label]) => (
-                <SelectItem key={value} value={value}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="flex-1 sm:w-[150px] h-10 sm:h-11 bg-card border-primary/20 text-sm">
+                <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Ordenar" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(sortOptions).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </motion.div>
 
         {/* Section Title */}
@@ -682,37 +684,38 @@ export default function Dashboard() {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4, duration: 0.4 }}
-          className="flex items-center gap-3 mb-6"
+          className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6"
         >
-          <div className="h-8 w-1 bg-primary rounded-full" />
-          <h2 className="text-xl font-semibold">Seus Contratos</h2>
-          <span className="text-sm text-muted-foreground">({filteredAndSortedContracts.length})</span>
+          <div className="h-6 sm:h-8 w-1 bg-primary rounded-full" />
+          <h2 className="text-base sm:text-xl font-semibold">Seus Contratos</h2>
+          <span className="text-xs sm:text-sm text-muted-foreground">({filteredAndSortedContracts.length})</span>
           {(statusFilter !== 'all' || debouncedSearch) && (
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto text-muted-foreground hover:text-foreground"
+              className="ml-auto text-muted-foreground hover:text-foreground text-xs sm:text-sm h-8 px-2 sm:px-3"
               onClick={() => { setStatusFilter('all'); setSearchTerm(''); }}
             >
-              <X className="h-4 w-4 mr-1" />
-              Limpar filtros
+              <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+              <span className="hidden sm:inline">Limpar filtros</span>
+              <span className="sm:hidden">Limpar</span>
             </Button>
           )}
         </motion.div>
 
         {/* Contracts List */}
         {loadingContracts ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <Card key={i} className="card-premium">
-                <CardHeader className="pb-3">
+                <CardHeader className="p-4 sm:pb-3">
                   <div className="space-y-2">
-                    <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
-                    <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+                    <div className="h-4 sm:h-5 w-3/4 bg-muted rounded animate-pulse" />
+                    <div className="h-3 sm:h-4 w-1/2 bg-muted rounded animate-pulse" />
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="h-6 w-20 bg-muted rounded-full animate-pulse" />
+                <CardContent className="p-4 pt-0">
+                  <div className="h-5 sm:h-6 w-20 bg-muted rounded-full animate-pulse" />
                 </CardContent>
               </Card>
             ))}
@@ -728,24 +731,24 @@ export default function Dashboard() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4 }}
               >
-                <Card className="py-16 card-premium border-dashed">
-                  <CardContent className="text-center">
+                <Card className="py-10 sm:py-16 card-premium border-dashed">
+                  <CardContent className="text-center px-4">
                     <motion.div 
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
-                      className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6 gold-border"
+                      className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 sm:mb-6 gold-border"
                     >
                       {emptyState.icon}
                     </motion.div>
-                    <h3 className="text-xl font-semibold mb-2">{emptyState.title}</h3>
-                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    <h3 className="text-lg sm:text-xl font-semibold mb-2">{emptyState.title}</h3>
+                    <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 max-w-md mx-auto">
                       {emptyState.description}
                     </p>
                     {emptyState.showCTA && (
-                      <Button asChild size="lg" className="btn-gold">
+                      <Button asChild size="default" className="btn-gold">
                         <Link to="/contracts/new">
-                          <Plus className="h-5 w-5 mr-2" />
+                          <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                           {emptyState.ctaText}
                         </Link>
                       </Button>
@@ -753,11 +756,11 @@ export default function Dashboard() {
                     {emptyState.showClearFilter && (
                       <Button 
                         variant="outline" 
-                        size="lg" 
+                        size="default" 
                         className="gold-border"
                         onClick={() => { setStatusFilter('all'); setSearchTerm(''); }}
                       >
-                        <X className="h-5 w-5 mr-2" />
+                        <X className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Limpar filtros
                       </Button>
                     )}
@@ -771,7 +774,7 @@ export default function Dashboard() {
             initial="hidden"
             animate="visible"
             variants={staggerContainer}
-            className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
           >
             <AnimatePresence mode="popLayout">
               {filteredAndSortedContracts.map((contract) => {
@@ -789,33 +792,33 @@ export default function Dashboard() {
                     layout
                   >
                     <Card className="card-premium hover:gold-glow transition-all duration-300 group h-full">
-                      <CardHeader className="pb-3">
+                      <CardHeader className="p-4 sm:p-6 pb-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
+                            <CardTitle className="text-sm sm:text-base font-semibold truncate group-hover:text-primary transition-colors">
                               {contract.title}
                             </CardTitle>
-                            <CardDescription className="text-xs mt-1">
+                            <CardDescription className="text-[11px] sm:text-xs mt-1">
                               {format(new Date(contract.created_at), "d 'de' MMM, yyyy", { locale: ptBR })}
                             </CardDescription>
                           </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                             <ExpirationBadge 
                               expiresAt={contract.expires_at} 
                               status={contract.status} 
                             />
                             <Badge 
                               variant="outline" 
-                              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 ${config.color}`}
+                              className={`flex items-center gap-1 text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 ${config.color}`}
                             >
-                              <StatusIcon className="h-3 w-3" />
+                              <StatusIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                               <span className="hidden sm:inline">{config.label}</span>
                             </Badge>
                           </div>
                         </div>
                       </CardHeader>
                       
-                      <CardContent className="pt-0 space-y-4">
+                      <CardContent className="p-4 sm:p-6 pt-0 space-y-3 sm:space-y-4">
                         {/* Progress Bar */}
                         {contract.contract_signatories && contract.contract_signatories.length > 0 && (
                           <ContractProgressBar signatories={contract.contract_signatories} />
@@ -827,7 +830,7 @@ export default function Dashboard() {
                             variant="outline" 
                             size="sm"
                             asChild 
-                            className="flex-1 gold-border hover:bg-primary/10 h-9"
+                            className="flex-1 gold-border hover:bg-primary/10 h-8 sm:h-9 text-xs sm:text-sm"
                           >
                             <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
                           </Button>
@@ -837,19 +840,19 @@ export default function Dashboard() {
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent className="card-premium border-primary/20">
+                            <AlertDialogContent className="card-premium border-primary/20 mx-4 sm:mx-0">
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir contrato</AlertDialogTitle>
-                                <AlertDialogDescription>
+                                <AlertDialogTitle className="text-base sm:text-lg">Excluir contrato</AlertDialogTitle>
+                                <AlertDialogDescription className="text-sm">
                                   Tem certeza que deseja excluir o contrato <span className="text-foreground font-medium">"{contract.title}"</span>? Esta ação não pode ser desfeita.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <AlertDialogFooter>
+                              <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                                 <AlertDialogCancel className="gold-border">Cancelar</AlertDialogCancel>
                                 <AlertDialogAction 
                                   onClick={() => handleDeleteContract(contract.id)}
@@ -878,14 +881,14 @@ export default function Dashboard() {
         transition={{ delay: 0.6, duration: 0.4 }}
         className="border-t border-primary/20 bg-card/50 mt-auto"
       >
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             <img 
               src={logoTransparent} 
               alt="Regozoni Docs" 
-              className="h-8 w-auto opacity-60"
+              className="h-6 sm:h-8 w-auto opacity-60"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
               © 2024 Dr. Sidney Regozoni. Todos os direitos reservados.
             </p>
           </div>
