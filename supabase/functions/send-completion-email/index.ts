@@ -57,7 +57,7 @@ const handler = async (req: Request): Promise<Response> => {
     `).join('');
 
     const emailResponse = await resend.emails.send({
-      from: "Regozoni Docs <noreply@xn--aceleraoforti-chb.com.br>",
+      from: "Regozoni Docs <noreply@equipe.aceleracaoforti.online>",
       to: [to],
       subject: `✅ Contrato concluído: ${contractTitle}`,
       html: `
