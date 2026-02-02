@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +24,8 @@ import {
   ArrowUpDown,
   Filter,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  ChevronRight
 } from 'lucide-react';
 import type { RealtimePostgresUpdatePayload } from '@supabase/supabase-js';
 import {
@@ -46,6 +47,7 @@ import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { ContractProgressBar } from '@/components/dashboard/ContractProgressBar';
 import { ExpirationBadge } from '@/components/dashboard/ExpirationBadge';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Animation variants
 const containerVariants = {
@@ -150,6 +152,7 @@ const SORT_STORAGE_KEY = 'dashboard_sort_preference';
 export default function Dashboard() {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loadingContracts, setLoadingContracts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,6 +162,7 @@ export default function Dashboard() {
     return (saved as SortOption) || 'date_desc';
   });
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -565,27 +569,27 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Desktop only */}
         <motion.div 
           initial="hidden"
           animate="visible"
           variants={containerVariants}
-          className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 mb-6 sm:mb-8"
+          className="hidden sm:grid grid-cols-3 gap-3 mb-8"
         >
           <motion.div variants={itemVariants}>
             <Button 
               asChild 
-              className="btn-gold h-11 sm:h-14 justify-start px-4 sm:px-5 group w-full"
+              className="btn-gold h-14 justify-start px-5 group w-full"
             >
               <Link to="/contracts/new">
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3" />
-                <span className="font-medium text-sm sm:text-base">Novo Contrato</span>
-                <ArrowRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all hidden sm:block" />
+                <Plus className="h-5 w-5 mr-3" />
+                <span className="font-medium">Novo Contrato</span>
+                <ArrowRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
               </Link>
             </Button>
           </motion.div>
           
-          <motion.div variants={itemVariants} className="hidden sm:block">
+          <motion.div variants={itemVariants}>
             <Button 
               variant="outline"
               className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 w-full ${
@@ -603,7 +607,7 @@ export default function Dashboard() {
             </Button>
           </motion.div>
           
-          <motion.div variants={itemVariants} className="hidden sm:block">
+          <motion.div variants={itemVariants}>
             <Button 
               variant="outline"
               className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 w-full ${
@@ -627,56 +631,121 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.4 }}
-          className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6 sm:mb-8"
+          className="mb-6 sm:mb-8"
         >
-          <div className="relative flex-1">
-            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 sm:pl-11 pr-10 h-10 sm:h-11 bg-card border-primary/20 focus:border-primary/50 text-sm"
-            />
-            {searchTerm && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
-                onClick={clearSearch}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          
-          <div className="flex gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="flex-1 sm:w-[150px] h-10 sm:h-11 bg-card border-primary/20 text-sm">
-                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="draft">Rascunho</SelectItem>
-                <SelectItem value="pending">Aguardando</SelectItem>
-                <SelectItem value="partially_signed">Em andamento</SelectItem>
-                <SelectItem value="completed">Concluído</SelectItem>
-                <SelectItem value="expired">Expirado</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Mobile: Compact search bar with toggle */}
+          {isMobile ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {showSearch ? (
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar contratos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      autoFocus
+                      className="pl-9 pr-10 h-10 bg-card border-primary/20 focus:border-primary/50 text-sm"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground"
+                      onClick={() => { setShowSearch(false); clearSearch(); }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 gold-border shrink-0"
+                      onClick={() => setShowSearch(true)}
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="flex-1 h-10 bg-card border-primary/20 text-sm">
+                        <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="draft">Rascunho</SelectItem>
+                        <SelectItem value="pending">Aguardando</SelectItem>
+                        <SelectItem value="partially_signed">Em andamento</SelectItem>
+                        <SelectItem value="completed">Concluído</SelectItem>
+                        <SelectItem value="expired">Expirado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                      <SelectTrigger className="w-[100px] h-10 bg-card border-primary/20 text-sm">
+                        <ArrowUpDown className="h-4 w-4 mr-1 text-muted-foreground" />
+                        <span className="truncate text-xs">{sortOptions[sortBy]?.split(' ')[0]}</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(sortOptions).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Desktop: Full search and filters */
+            <div className="flex gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar contratos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-11 pr-10 h-11 bg-card border-primary/20 focus:border-primary/50"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={clearSearch}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[150px] h-11 bg-card border-primary/20">
+                  <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="draft">Rascunho</SelectItem>
+                  <SelectItem value="pending">Aguardando</SelectItem>
+                  <SelectItem value="partially_signed">Em andamento</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="expired">Expirado</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-              <SelectTrigger className="flex-1 sm:w-[150px] h-10 sm:h-11 bg-card border-primary/20 text-sm">
-                <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Ordenar" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(sortOptions).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <SelectTrigger className="w-[150px] h-11 bg-card border-primary/20">
+                  <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Ordenar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(sortOptions).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </motion.div>
 
         {/* Section Title */}
@@ -774,7 +843,7 @@ export default function Dashboard() {
             initial="hidden"
             animate="visible"
             variants={staggerContainer}
-            className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 pb-20 sm:pb-0"
           >
             <AnimatePresence mode="popLayout">
               {filteredAndSortedContracts.map((contract) => {
@@ -791,81 +860,125 @@ export default function Dashboard() {
                     exit="exit"
                     layout
                   >
-                    <Card className="card-premium hover:gold-glow transition-all duration-300 group h-full">
-                      <CardHeader className="p-4 sm:p-6 pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-sm sm:text-base font-semibold truncate group-hover:text-primary transition-colors">
-                              {contract.title}
-                            </CardTitle>
-                            <CardDescription className="text-[11px] sm:text-xs mt-1">
-                              {format(new Date(contract.created_at), "d 'de' MMM, yyyy", { locale: ptBR })}
-                            </CardDescription>
+                    {/* Mobile: Compact card with tap to navigate */}
+                    {isMobile ? (
+                      <Card 
+                        className="card-premium active:scale-[0.98] transition-all duration-200"
+                        onClick={() => navigate(`/contracts/${contract.id}`)}
+                      >
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-3">
+                            {/* Status indicator */}
+                            <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+                              contract.status === 'completed' ? 'bg-emerald-500/10' :
+                              contract.status === 'pending' || contract.status === 'partially_signed' ? 'bg-amber-500/10' :
+                              'bg-muted'
+                            }`}>
+                              <StatusIcon className={`h-5 w-5 ${
+                                contract.status === 'completed' ? 'text-emerald-500' :
+                                contract.status === 'pending' || contract.status === 'partially_signed' ? 'text-amber-500' :
+                                'text-muted-foreground'
+                              }`} />
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <h3 className="text-sm font-medium truncate">{contract.title}</h3>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-muted-foreground">
+                                  {format(new Date(contract.created_at), "dd/MM/yy", { locale: ptBR })}
+                                </span>
+                                {contract.contract_signatories && contract.contract_signatories.length > 0 && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    • {contract.contract_signatories.filter(s => s.signed_at).length}/{contract.contract_signatories.length} assinaturas
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-                            <ExpirationBadge 
-                              expiresAt={contract.expires_at} 
-                              status={contract.status} 
-                            />
-                            <Badge 
-                              variant="outline" 
-                              className={`flex items-center gap-1 text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 ${config.color}`}
-                            >
-                              <StatusIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                              <span className="hidden sm:inline">{config.label}</span>
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      
-                      <CardContent className="p-4 sm:p-6 pt-0 space-y-3 sm:space-y-4">
-                        {/* Progress Bar */}
-                        {contract.contract_signatories && contract.contract_signatories.length > 0 && (
-                          <ContractProgressBar signatories={contract.contract_signatories} />
-                        )}
-                        
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 pt-2 border-t border-border/50">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            asChild 
-                            className="flex-1 gold-border hover:bg-primary/10 h-8 sm:h-9 text-xs sm:text-sm"
-                          >
-                            <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
-                          </Button>
-                          
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      /* Desktop: Full card with actions */
+                      <Card className="card-premium hover:gold-glow transition-all duration-300 group h-full">
+                        <CardHeader className="p-6 pb-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
+                                {contract.title}
+                              </CardTitle>
+                              <CardDescription className="text-xs mt-1">
+                                {format(new Date(contract.created_at), "d 'de' MMM, yyyy", { locale: ptBR })}
+                              </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <ExpirationBadge 
+                                expiresAt={contract.expires_at} 
+                                status={contract.status} 
+                              />
+                              <Badge 
+                                variant="outline" 
+                                className={`flex items-center gap-1 text-[10px] px-2 py-0.5 ${config.color}`}
                               >
-                                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="card-premium border-primary/20 mx-4 sm:mx-0">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="text-base sm:text-lg">Excluir contrato</AlertDialogTitle>
-                                <AlertDialogDescription className="text-sm">
-                                  Tem certeza que deseja excluir o contrato <span className="text-foreground font-medium">"{contract.title}"</span>? Esta ação não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-                                <AlertDialogCancel className="gold-border">Cancelar</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={() => handleDeleteContract(contract.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                <StatusIcon className="h-3 w-3" />
+                                {config.label}
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        
+                        <CardContent className="p-6 pt-0 space-y-4">
+                          {/* Progress Bar */}
+                          {contract.contract_signatories && contract.contract_signatories.length > 0 && (
+                            <ContractProgressBar signatories={contract.contract_signatories} />
+                          )}
+                          
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              asChild 
+                              className="flex-1 gold-border hover:bg-primary/10 h-9"
+                            >
+                              <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
+                            </Button>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </CardContent>
-                    </Card>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="card-premium border-primary/20">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir contrato</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir o contrato <span className="text-foreground font-medium">"{contract.title}"</span>? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="gold-border">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => handleDeleteContract(contract.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </motion.div>
                 );
               })}
@@ -874,21 +987,41 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Mobile FAB - Floating Action Button */}
+      {isMobile && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, type: "spring", stiffness: 200, damping: 15 }}
+          className="fixed bottom-6 right-4 z-50"
+        >
+          <Button 
+            asChild 
+            size="lg"
+            className="btn-gold h-14 w-14 rounded-full shadow-lg shadow-primary/30"
+          >
+            <Link to="/contracts/new">
+              <Plus className="h-6 w-6" />
+            </Link>
+          </Button>
+        </motion.div>
+      )}
+
+      {/* Footer - Hidden on mobile */}
       <motion.footer 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6, duration: 0.4 }}
-        className="border-t border-primary/20 bg-card/50 mt-auto"
+        className="hidden sm:block border-t border-primary/20 bg-card/50 mt-auto"
       >
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
             <img 
               src={logoTransparent} 
               alt="Regozoni Docs" 
-              className="h-6 sm:h-8 w-auto opacity-60"
+              className="h-8 w-auto opacity-60"
             />
-            <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
+            <p className="text-xs text-muted-foreground">
               © 2024 Dr. Sidney Regozoni. Todos os direitos reservados.
             </p>
           </div>
