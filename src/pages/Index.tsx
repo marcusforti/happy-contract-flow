@@ -8,18 +8,16 @@ import { FileSignature, Shield, Clock, ArrowRight, Loader2, Quote } from 'lucide
 import logoTransparent from '@/assets/logo-transparent.png';
 import sidneyPhoto from '@/assets/sidney-regozoni.png';
 import heroVideo from '@/assets/hero-video.mp4';
-import heroMobileBg from '@/assets/hero-mobile-bg.jpg';
+import heroVideoMobile from '@/assets/hero-video-mobile.mp4';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const isMobile = useIsMobile();
   const [videoLoaded, setVideoLoaded] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Force autoplay on mount (desktop only)
+  // Force autoplay on mount
   useEffect(() => {
-    if (isMobile) return; // Skip for mobile - using image instead
     
     const video = videoRef.current;
     if (!video) return;
@@ -91,20 +89,29 @@ export default function Index() {
           <div className="absolute inset-0 bg-gradient-to-br from-[hsl(0,0%,8%)] via-[hsl(43,20%,6%)] to-[hsl(0,0%,4%)]" />
           
           {/* Loading skeleton animation */}
-          {(isMobile ? !imageLoaded : !videoLoaded) && (
+          {!videoLoaded && (
             <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-primary/5 to-muted/10 animate-pulse" />
           )}
           
-          {/* Mobile: Static image background */}
+          {/* Mobile: Light video background */}
           {isMobile && (
-            <img
-              src={heroMobileBg}
-              alt=""
-              onLoad={() => setImageLoaded(true)}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-                imageLoaded ? 'opacity-100' : 'opacity-0'
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              controls={false}
+              disablePictureInPicture
+              controlsList="nodownload nofullscreen noremoteplayback"
+              onCanPlay={() => setVideoLoaded(true)}
+              className={`video-background absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+                videoLoaded ? 'opacity-100' : 'opacity-0'
               }`}
-            />
+            >
+              <source src={heroVideoMobile} type="video/mp4" />
+            </video>
           )}
           
           {/* Desktop: Video background */}
