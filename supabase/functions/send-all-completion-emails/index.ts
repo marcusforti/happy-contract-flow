@@ -59,23 +59,18 @@ function generateCertificatePdf(
 
   // Header with gradient effect (simplified as solid color)
   doc.setFillColor(30, 28, 20);
-  doc.roundedRect(margin, yPos, contentWidth, 35, 2, 2, 'F');
-
-  // Certificate icon (emoji replacement with text)
-  doc.setFontSize(24);
-  doc.setTextColor(...goldColor);
-  doc.text('📜', pageWidth / 2, yPos + 12, { align: 'center' });
+  doc.roundedRect(margin, yPos, contentWidth, 30, 2, 2, 'F');
 
   // Title
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setTextColor(...goldColor);
-  doc.text('CERTIFICADO DE CONCLUSÃO', pageWidth / 2, yPos + 22, { align: 'center' });
+  doc.text('CERTIFICADO DE CONCLUSAO', pageWidth / 2, yPos + 14, { align: 'center' });
 
   doc.setFontSize(9);
   doc.setTextColor(...textDarkGray);
-  doc.text('Documento assinado eletronicamente', pageWidth / 2, yPos + 30, { align: 'center' });
+  doc.text('Documento assinado eletronicamente', pageWidth / 2, yPos + 22, { align: 'center' });
 
-  yPos += 45;
+  yPos += 38;
 
   // Document Info Section
   doc.setFillColor(25, 23, 18);
@@ -131,7 +126,7 @@ function generateCertificatePdf(
   // Signatories Section
   doc.setFontSize(10);
   doc.setTextColor(...goldColor);
-  doc.text('✍️ ASSINATURAS COLETADAS', margin, yPos);
+  doc.text('ASSINATURAS COLETADAS', margin, yPos);
   yPos += 8;
 
   signatories.forEach((sig, idx) => {
@@ -165,7 +160,7 @@ function generateCertificatePdf(
     doc.roundedRect(margin + contentWidth - 25, yPos + 2, 22, 6, 1, 1, 'F');
     doc.setFontSize(6);
     doc.setTextColor(255, 255, 255);
-    doc.text('✓ Assinado', margin + contentWidth - 24, yPos + 6);
+    doc.text('Assinado', margin + contentWidth - 22, yPos + 6);
 
     // Name and email
     doc.setFontSize(11);
@@ -233,7 +228,7 @@ function generateCertificatePdf(
 
     doc.setFontSize(10);
     doc.setTextColor(...goldColor);
-    doc.text('📋 TRILHA DE AUDITORIA', margin, yPos);
+    doc.text('TRILHA DE AUDITORIA', margin, yPos);
     yPos += 6;
 
     const actionLabels: Record<string, string> = {
@@ -304,7 +299,7 @@ function generateCertificatePdf(
 
   doc.setFontSize(9);
   doc.setTextColor(...goldColor);
-  doc.text('⚖️ Validade Jurídica', margin + 6, yPos + 7);
+  doc.text('VALIDADE JURIDICA', margin + 6, yPos + 7);
 
   doc.setFontSize(7);
   doc.setTextColor(...textGray);
@@ -320,7 +315,7 @@ function generateCertificatePdf(
 
   doc.setFontSize(10);
   doc.setTextColor(...goldColor);
-  doc.text('⚖️ Regozoni Docs', pageWidth / 2, pageHeight - margin - 9, { align: 'center' });
+  doc.text('Regozoni Docs', pageWidth / 2, pageHeight - margin - 9, { align: 'center' });
 
   doc.setFontSize(6);
   doc.setTextColor(...textDarkGray);
