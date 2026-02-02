@@ -14,3 +14,12 @@ verify_jwt = false
 
 [functions.send-owner-completion-email]
 verify_jwt = false
+
+[functions.send-signature-confirmation]
+verify_jwt = false
+
+[functions.notify-owner-signature]
+verify_jwt = false
+
+[functions.send-all-completion-emails]
+verify_jwt = false
