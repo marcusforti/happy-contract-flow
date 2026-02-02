@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.send-all-completion-emails]
 verify_jwt = false
+
+[functions.get-client-info]
+verify_jwt = false

@@ -31,6 +31,18 @@ interface Signatory {
 
 type Step = 'reading' | 'signing';
 
+interface ClientInfo {
+  ip_address: string;
+  user_agent: string;
+  accept_language: string;
+  geolocation: {
+    country: string | null;
+    city: string | null;
+    region: string | null;
+  } | null;
+  timestamp: string;
+}
+
 export default function SigningPage() {
   const { token } = useParams<{ token: string }>();
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
@@ -47,12 +59,35 @@ export default function SigningPage() {
   const [hasReadDocument, setHasReadDocument] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [termsAcceptedLogged, setTermsAcceptedLogged] = useState(false);
 
   useEffect(() => {
     if (token) {
+      fetchClientInfo();
       fetchSigningData();
     }
   }, [token]);
+
+  const fetchClientInfo = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-client-info');
+      if (!error && data) {
+        setClientInfo(data);
+        console.log('Client info captured:', data.ip_address);
+      }
+    } catch (err) {
+      console.error('Error fetching client info:', err);
+      // Fallback to N/A if the function fails
+      setClientInfo({
+        ip_address: 'N/A',
+        user_agent: navigator.userAgent,
+        accept_language: navigator.language,
+        geolocation: null,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  };
 
   useEffect(() => {
     if (contract?.file_path) {
@@ -126,13 +161,40 @@ export default function SigningPage() {
     setContract(contractData);
     setLoading(false);
 
+    // Wait a bit for clientInfo to be fetched
+    const ip = clientInfo?.ip_address || 'N/A';
     await supabase.from('audit_logs').insert({
       contract_id: contractData.id,
       signatory_id: signatoryData.id,
       action: 'viewed',
-      ip_address: 'N/A',
+      ip_address: ip,
       user_agent: navigator.userAgent,
+      metadata: clientInfo?.geolocation ? { geolocation: clientInfo.geolocation } : null,
     });
+  };
+
+  // Helper function to get current IP
+  const getIpAddress = () => clientInfo?.ip_address || 'N/A';
+
+  // Log terms acceptance when checkbox is clicked
+  const handleTermsAcceptance = async (accepted: boolean) => {
+    setHasReadDocument(accepted);
+    
+    if (accepted && !termsAcceptedLogged && signatory && contract) {
+      setTermsAcceptedLogged(true);
+      await supabase.from('audit_logs').insert({
+        contract_id: contract.id,
+        signatory_id: signatory.id,
+        action: 'terms_accepted',
+        ip_address: getIpAddress(),
+        user_agent: navigator.userAgent,
+        metadata: { 
+          accepted_at: new Date().toISOString(),
+          geolocation: clientInfo?.geolocation || null,
+        },
+      });
+      console.log('Terms acceptance logged');
+    }
   };
 
   const clearSignature = () => {
@@ -199,7 +261,7 @@ export default function SigningPage() {
           field_id: field.id,
           signature_type: signatureType,
           signature_data: signatureData,
-          ip_address: 'N/A',
+          ip_address: getIpAddress(),
           user_agent: navigator.userAgent,
         });
 
@@ -218,9 +280,12 @@ export default function SigningPage() {
         contract_id: contract.id,
         signatory_id: signatory.id,
         action: 'signed',
-        ip_address: 'N/A',
+        ip_address: getIpAddress(),
         user_agent: navigator.userAgent,
-        metadata: { signature_type: signatureType },
+        metadata: { 
+          signature_type: signatureType,
+          geolocation: clientInfo?.geolocation || null,
+        },
       });
 
       const { data: allSignatories } = await supabase
@@ -273,8 +338,9 @@ export default function SigningPage() {
         await supabase.from('audit_logs').insert({
           contract_id: contract.id,
           action: 'completed',
-          ip_address: 'N/A',
+          ip_address: getIpAddress(),
           user_agent: navigator.userAgent,
+          metadata: { geolocation: clientInfo?.geolocation || null },
         });
 
         try {
@@ -528,12 +594,12 @@ export default function SigningPage() {
                           ? 'border-primary bg-primary/5' 
                           : 'border-border bg-muted/30 hover:border-primary/50'
                       }`}
-                      onClick={() => setHasReadDocument(!hasReadDocument)}
+                      onClick={() => handleTermsAcceptance(!hasReadDocument)}
                     >
                       <Checkbox
                         id="read-confirmation"
                         checked={hasReadDocument}
-                        onCheckedChange={(checked) => setHasReadDocument(checked === true)}
+                        onCheckedChange={(checked) => handleTermsAcceptance(checked === true)}
                         className="mt-1"
                       />
                       <div className="flex-1">
