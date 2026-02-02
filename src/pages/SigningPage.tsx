@@ -8,12 +8,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Scale, Pen, Type, Check, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Contract {
   id: string;
   title: string;
   description: string | null;
   status: string;
+  owner_id: string;
+  document_hash: string | null;
 }
 
 interface Signatory {
@@ -68,7 +72,7 @@ export default function SigningPage() {
     // Fetch contract
     const { data: contractData, error: contractError } = await supabase
       .from('contracts')
-      .select('id, title, description, status')
+      .select('id, title, description, status, owner_id, document_hash')
       .eq('id', signatoryData.contract_id)
       .single();
 
@@ -206,6 +210,62 @@ export default function SigningPage() {
           ip_address: 'N/A',
           user_agent: navigator.userAgent,
         });
+
+        // Send completion emails to all signatories and owner
+        try {
+          // Fetch all signatories with details
+          const { data: signatoryDetails } = await supabase
+            .from('contract_signatories')
+            .select('id, name, email, signed_at')
+            .eq('contract_id', contract.id);
+
+          // Fetch owner profile
+          const { data: ownerProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('user_id', contract.owner_id)
+            .single();
+
+          const completedAt = format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
+          
+          const signatoriesForEmail = signatoryDetails?.map(s => ({
+            name: s.name,
+            email: s.email,
+            signedAt: s.signed_at 
+              ? format(new Date(s.signed_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+              : 'N/A'
+          })) || [];
+
+          // Prepare recipients list (all signatories + owner)
+          const recipients = [
+            ...(signatoryDetails || []).map(s => ({ email: s.email, name: s.name })),
+          ];
+
+          // Add owner if not already a signatory
+          if (ownerProfile && !recipients.some(r => r.email === ownerProfile.email)) {
+            recipients.push({ email: ownerProfile.email, name: ownerProfile.full_name });
+          }
+
+          // Send completion email to each recipient
+          for (const recipient of recipients) {
+            await supabase.functions.invoke('send-completion-email', {
+              body: {
+                to: recipient.email,
+                recipientName: recipient.name,
+                contractTitle: contract.title,
+                completedAt,
+                signatories: signatoriesForEmail,
+                certificateLink: `${window.location.origin}/dashboard`,
+                documentHash: contract.document_hash,
+              },
+            });
+          }
+
+          console.log(`Completion emails sent to ${recipients.length} recipients`);
+        } catch (emailErr) {
+          console.error('Error sending completion emails:', emailErr);
+          // Don't fail the signing process if emails fail
+        }
       } else {
         // Update to partially signed if not all signed
         await supabase
