@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -98,26 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    if (error) return { error };
-
-    // Create profile after signup
-    if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').insert({
-        user_id: data.user.id,
-        full_name: fullName,
-        email: email
-      });
-
-      // Create default role as signatory
-      await supabase.from('user_roles').insert({
-        user_id: data.user.id,
-        role: 'signatory'
-      });
-
-      if (profileError) return { error: profileError };
-    }
-
-    return { error: null };
+    // Profile and role are created automatically by database trigger
+    return { error };
   };
 
   const signIn = async (email: string, password: string) => {
