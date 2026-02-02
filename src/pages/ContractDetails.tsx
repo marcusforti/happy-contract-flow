@@ -70,6 +70,7 @@ const actionLabels: Record<string, string> = {
   completed: 'Contrato concluído',
   downloaded: 'Documento baixado',
   sent: 'Enviado para assinatura',
+  certificate_downloaded: 'Certificado baixado',
 };
 
 export default function ContractDetails() {
@@ -82,6 +83,7 @@ export default function ContractDetails() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [downloadingCertificate, setDownloadingCertificate] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -262,6 +264,348 @@ export default function ContractDetails() {
       toast.error('Erro ao baixar documento');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const downloadCertificate = async () => {
+    if (!contract || contract.status !== 'completed' || !user) return;
+
+    setDownloadingCertificate(true);
+    try {
+      // Fetch detailed signatures with IP and user_agent
+      const { data: signaturesData, error: signaturesError } = await supabase
+        .from('signatures')
+        .select(`
+          id,
+          ip_address,
+          user_agent,
+          created_at,
+          signature_type,
+          signatory_id,
+          contract_signatories!inner (
+            id,
+            name,
+            email,
+            signed_at,
+            contract_id
+          )
+        `)
+        .eq('contract_signatories.contract_id', contract.id);
+
+      if (signaturesError) {
+        console.error('Error fetching signatures:', signaturesError);
+      }
+
+      // Map signatures to signatories
+      const signatoryDetails = signatories.map(signatory => {
+        const signature = signaturesData?.find(s => s.signatory_id === signatory.id);
+        return {
+          name: signatory.name,
+          email: signatory.email,
+          signed_at: signatory.signed_at,
+          ip_address: signature?.ip_address || 'N/A',
+          user_agent: signature?.user_agent || 'N/A',
+          signature_type: signature?.signature_type || 'N/A',
+        };
+      });
+
+      // Format dates helper
+      const formatDateTime = (dateStr: string) => {
+        return format(new Date(dateStr), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR });
+      };
+
+      const formatDate = (dateStr: string) => {
+        return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
+      };
+
+      // Parse user agent to get browser info
+      const parseUserAgent = (ua: string): string => {
+        if (!ua || ua === 'N/A') return 'N/A';
+        if (ua.includes('Chrome')) return 'Chrome';
+        if (ua.includes('Firefox')) return 'Firefox';
+        if (ua.includes('Safari')) return 'Safari';
+        if (ua.includes('Edge')) return 'Edge';
+        return ua.substring(0, 50) + '...';
+      };
+
+      // Find completion date (last signature or completed audit log)
+      const completedLog = auditLogs.find(log => log.action === 'completed');
+      const lastSignature = signatoryDetails
+        .filter(s => s.signed_at)
+        .sort((a, b) => new Date(b.signed_at!).getTime() - new Date(a.signed_at!).getTime())[0];
+      const completionDate = completedLog?.created_at || lastSignature?.signed_at || contract.created_at;
+
+      // Generate HTML certificate
+      const certificateHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Certificado de Conclusão - ${contract.title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0a0a0a;
+      color: #f2f2f2;
+      padding: 40px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: linear-gradient(180deg, #141414 0%, #0f0f0f 100%);
+      border: 1px solid rgba(202, 138, 4, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #ca8a04 0%, #a16207 100%);
+      color: #0a0a0a;
+      padding: 30px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .header p {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    .section {
+      padding: 25px 30px;
+      border-bottom: 1px solid rgba(202, 138, 4, 0.15);
+    }
+    .section:last-child { border-bottom: none; }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #ca8a04;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .info-item label {
+      font-size: 12px;
+      color: #999;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .info-item span {
+      font-size: 14px;
+      color: #f2f2f2;
+    }
+    .hash-box {
+      background: #1a1a1a;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      word-break: break-all;
+      color: #ca8a04;
+    }
+    .signatory-card {
+      background: #1a1a1a;
+      border: 1px solid rgba(202, 138, 4, 0.2);
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+    .signatory-card:last-child { margin-bottom: 0; }
+    .signatory-name {
+      font-weight: 600;
+      color: #f2f2f2;
+      margin-bottom: 8px;
+    }
+    .signatory-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .signatory-details span {
+      color: #999;
+    }
+    .signatory-details strong {
+      color: #f2f2f2;
+    }
+    .audit-item {
+      display: flex;
+      gap: 15px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .audit-item:last-child { border-bottom: none; }
+    .audit-date {
+      font-size: 12px;
+      color: #999;
+      min-width: 140px;
+    }
+    .audit-action {
+      font-size: 13px;
+      color: #f2f2f2;
+    }
+    .legal-notice {
+      background: rgba(202, 138, 4, 0.1);
+      border-left: 3px solid #ca8a04;
+      padding: 15px;
+      font-size: 12px;
+      color: #ccc;
+    }
+    .legal-notice strong {
+      color: #ca8a04;
+      display: block;
+      margin-bottom: 5px;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 11px;
+      color: #666;
+      border-top: 1px solid rgba(202, 138, 4, 0.15);
+    }
+    .badge {
+      display: inline-block;
+      background: #166534;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    @media print {
+      body { background: #fff; color: #000; padding: 20px; }
+      .container { border: 1px solid #ccc; }
+      .header { background: #ca8a04; }
+      .section { border-color: #eee; }
+      .signatory-card { background: #f9f9f9; border-color: #ddd; }
+      .hash-box { background: #f5f5f5; }
+      .legal-notice { background: #fffbeb; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>CERTIFICADO DE CONCLUSÃO</h1>
+      <p>Regozoni Docs - Plataforma de Assinatura Eletrônica</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📄 Identificação do Documento</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <label>Título do Contrato</label>
+          <span>${contract.title}</span>
+        </div>
+        <div class="info-item">
+          <label>Status</label>
+          <span>Concluído <span class="badge">✓ Assinado</span></span>
+        </div>
+        <div class="info-item">
+          <label>Data de Criação</label>
+          <span>${formatDate(contract.created_at)}</span>
+        </div>
+        <div class="info-item">
+          <label>Data de Conclusão</label>
+          <span>${formatDate(completionDate)}</span>
+        </div>
+      </div>
+      ${contract.description ? `
+      <div class="info-item" style="margin-top: 15px;">
+        <label>Descrição</label>
+        <span>${contract.description}</span>
+      </div>
+      ` : ''}
+      ${contract.document_hash ? `
+      <div style="margin-top: 15px;">
+        <label style="font-size: 12px; color: #999; display: block; margin-bottom: 8px;">Hash SHA-256 do Documento</label>
+        <div class="hash-box">${contract.document_hash}</div>
+      </div>
+      ` : ''}
+    </div>
+
+    <div class="section">
+      <div class="section-title">✍️ Signatários (${signatoryDetails.length})</div>
+      ${signatoryDetails.map((sig, idx) => `
+      <div class="signatory-card">
+        <div class="signatory-name">${idx + 1}. ${sig.name}</div>
+        <div class="signatory-details">
+          <div><span>E-mail:</span> <strong>${sig.email}</strong></div>
+          <div><span>Assinado em:</span> <strong>${sig.signed_at ? formatDateTime(sig.signed_at) : 'Pendente'}</strong></div>
+          <div><span>Endereço IP:</span> <strong>${sig.ip_address}</strong></div>
+          <div><span>Navegador:</span> <strong>${parseUserAgent(sig.user_agent)}</strong></div>
+          <div><span>Tipo de Assinatura:</span> <strong>${sig.signature_type === 'draw' ? 'Desenhada' : sig.signature_type === 'type' ? 'Digitada' : sig.signature_type}</strong></div>
+        </div>
+      </div>
+      `).join('')}
+    </div>
+
+    <div class="section">
+      <div class="section-title">📋 Trilha de Auditoria</div>
+      ${auditLogs.slice(0, 20).map(log => `
+      <div class="audit-item">
+        <div class="audit-date">${formatDateTime(log.created_at)}</div>
+        <div class="audit-action">${actionLabels[log.action] || log.action}${log.ip_address && log.ip_address !== 'N/A' ? ` (IP: ${log.ip_address})` : ''}</div>
+      </div>
+      `).join('')}
+    </div>
+
+    <div class="section">
+      <div class="legal-notice">
+        <strong>⚖️ Validade Jurídica</strong>
+        Este documento foi assinado eletronicamente através da plataforma Regozoni Docs, em conformidade com a 
+        <strong style="display: inline;">Lei nº 14.063/2020</strong> que dispõe sobre o uso de assinaturas eletrônicas 
+        em interações com entes públicos, em atos de pessoas jurídicas e em questões de saúde. A assinatura eletrônica 
+        simples utilizada neste documento possui validade jurídica quando associada à trilha de auditoria completa, 
+        identificação dos signatários e hash do documento para verificação de integridade.
+      </div>
+    </div>
+
+    <div class="footer">
+      Certificado gerado em ${formatDateTime(new Date().toISOString())} | Regozoni Docs | ID do Contrato: ${contract.id}
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+      // Create blob and download
+      const blob = new Blob([certificateHtml], { type: 'text/html;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificado-${contract.title.toLowerCase().replace(/\s+/g, '-')}.html`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      // Register audit log
+      await supabase.from('audit_logs').insert({
+        contract_id: contract.id,
+        user_id: user.id,
+        action: 'certificate_downloaded',
+        ip_address: 'N/A',
+        user_agent: navigator.userAgent,
+      });
+
+      toast.success('Certificado baixado com sucesso!');
+      fetchContractData();
+    } catch (error) {
+      console.error('Certificate download error:', error);
+      toast.error('Erro ao gerar certificado');
+    } finally {
+      setDownloadingCertificate(false);
     }
   };
 
@@ -478,9 +822,18 @@ export default function ContractDetails() {
                   </Button>
                 )}
                 {contract.status === 'completed' && (
-                  <Button variant="outline" className="w-full gold-border">
-                    <Scale className="h-4 w-4 mr-2" />
-                    Baixar certificado
+                  <Button 
+                    variant="outline" 
+                    className="w-full gold-border"
+                    onClick={downloadCertificate}
+                    disabled={downloadingCertificate}
+                  >
+                    {downloadingCertificate ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Scale className="h-4 w-4 mr-2" />
+                    )}
+                    {downloadingCertificate ? 'Gerando...' : 'Baixar certificado'}
                   </Button>
                 )}
               </CardContent>
