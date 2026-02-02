@@ -197,6 +197,41 @@ export default function SigningPage() {
         .eq('contract_id', contract.id);
 
       const allSigned = allSignatories?.every(s => s.signed_at);
+      const remainingCount = allSignatories?.filter(s => !s.signed_at).length || 0;
+
+      // 1. Send signature confirmation to the signatory
+      try {
+        const signedAtFormatted = new Date().toLocaleString('pt-BR', { 
+          dateStyle: 'short', 
+          timeStyle: 'short' 
+        });
+        
+        await supabase.functions.invoke('send-signature-confirmation', {
+          body: {
+            signatoryEmail: signatory.email,
+            signatoryName: signatory.name,
+            contractTitle: contract.title,
+            signedAt: signedAtFormatted,
+            remainingSignatories: remainingCount,
+            isLastSignature: allSigned,
+          },
+        });
+      } catch (emailErr) {
+        console.error('Error sending signature confirmation:', emailErr);
+      }
+
+      // 2. Notify contract owner about the new signature
+      try {
+        await supabase.functions.invoke('notify-owner-signature', {
+          body: {
+            contractId: contract.id,
+            accessToken: token,
+            origin: window.location.origin,
+          },
+        });
+      } catch (emailErr) {
+        console.error('Error notifying owner:', emailErr);
+      }
 
       if (allSigned) {
         await supabase
@@ -211,7 +246,7 @@ export default function SigningPage() {
           user_agent: navigator.userAgent,
         });
 
-        // Send completion email to contract owner (via backend function with privileged read)
+        // 3. Send completion email to contract owner
         try {
           const { data: notifyData, error: notifyError } = await supabase.functions.invoke('send-owner-completion-email', {
             body: {
@@ -226,6 +261,19 @@ export default function SigningPage() {
           }
         } catch (emailErr) {
           console.error('Error sending owner completion email:', emailErr);
+        }
+
+        // 4. Send completion emails to ALL signatories
+        try {
+          await supabase.functions.invoke('send-all-completion-emails', {
+            body: {
+              contractId: contract.id,
+              accessToken: token,
+              origin: window.location.origin,
+            },
+          });
+        } catch (emailErr) {
+          console.error('Error sending all completion emails:', emailErr);
         }
       } else {
         // Update to partially signed if not all signed
