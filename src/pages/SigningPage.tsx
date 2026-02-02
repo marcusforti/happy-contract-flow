@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ArrowRight, ArrowLeft, User, Mail, ShieldCheck, Download } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ArrowRight, ArrowLeft, User, Mail, ShieldCheck, Download, KeyRound, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,9 +28,10 @@ interface Signatory {
   email: string;
   signed_at: string | null;
   contract_id: string;
+  otp_verified_at: string | null;
 }
 
-type Step = 'reading' | 'signing';
+type Step = 'verification' | 'reading' | 'signing';
 
 interface ClientInfo {
   ip_address: string;
@@ -55,12 +57,19 @@ export default function SigningPage() {
   const [typedSignature, setTypedSignature] = useState('');
   const [error, setError] = useState<string | null>(null);
   
-  const [step, setStep] = useState<Step>('reading');
+  const [step, setStep] = useState<Step>('verification');
   const [hasReadDocument, setHasReadDocument] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [termsAcceptedLogged, setTermsAcceptedLogged] = useState(false);
+  
+  // OTP verification state
+  const [otpValue, setOtpValue] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpEmailHint, setOtpEmailHint] = useState('');
 
   useEffect(() => {
     if (token) {
@@ -133,6 +142,10 @@ export default function SigningPage() {
     }
 
     setSignatory(signatoryData);
+    
+    // Set email hint for OTP screen
+    const email = signatoryData.email;
+    setOtpEmailHint(email.replace(/(.{2})(.*)(@.*)/, "$1***$3"));
 
     const { data: contractData, error: contractError } = await supabase
       .from('contracts')
@@ -160,17 +173,91 @@ export default function SigningPage() {
 
     setContract(contractData);
     setLoading(false);
+    
+    // Check if OTP already verified - skip to reading step
+    if (signatoryData.otp_verified_at) {
+      setStep('reading');
+      // Log viewed event
+      const ip = clientInfo?.ip_address || 'N/A';
+      await supabase.from('audit_logs').insert({
+        contract_id: contractData.id,
+        signatory_id: signatoryData.id,
+        action: 'viewed',
+        ip_address: ip,
+        user_agent: navigator.userAgent,
+        metadata: clientInfo?.geolocation ? { geolocation: clientInfo.geolocation } : null,
+      });
+    }
+  };
 
-    // Wait a bit for clientInfo to be fetched
-    const ip = clientInfo?.ip_address || 'N/A';
-    await supabase.from('audit_logs').insert({
-      contract_id: contractData.id,
-      signatory_id: signatoryData.id,
-      action: 'viewed',
-      ip_address: ip,
-      user_agent: navigator.userAgent,
-      metadata: clientInfo?.geolocation ? { geolocation: clientInfo.geolocation } : null,
-    });
+  // Send OTP to email
+  const sendOtp = async () => {
+    if (!token) return;
+    
+    setOtpLoading(true);
+    setOtpError(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { accessToken: token }
+      });
+      
+      if (error) throw error;
+      
+      if (data.alreadyVerified) {
+        setStep('reading');
+        toast.success('Email já verificado!');
+      } else {
+        setOtpSent(true);
+        toast.success('Código enviado para seu email!');
+      }
+    } catch (err: any) {
+      console.error('Error sending OTP:', err);
+      setOtpError(err.message || 'Erro ao enviar código');
+      toast.error('Erro ao enviar código');
+    }
+    
+    setOtpLoading(false);
+  };
+
+  // Verify OTP
+  const verifyOtp = async () => {
+    if (!token || otpValue.length !== 6) return;
+    
+    setOtpLoading(true);
+    setOtpError(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { accessToken: token, otp: otpValue }
+      });
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast.success('Email verificado com sucesso!');
+        setStep('reading');
+        
+        // Log viewed event after verification
+        if (contract && signatory) {
+          const ip = clientInfo?.ip_address || 'N/A';
+          await supabase.from('audit_logs').insert({
+            contract_id: contract.id,
+            signatory_id: signatory.id,
+            action: 'viewed',
+            ip_address: ip,
+            user_agent: navigator.userAgent,
+            metadata: clientInfo?.geolocation ? { geolocation: clientInfo.geolocation } : null,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Error verifying OTP:', err);
+      setOtpError(err.message || 'Código inválido');
+      setOtpValue('');
+    }
+    
+    setOtpLoading(false);
   };
 
   // Helper function to get current IP
@@ -453,18 +540,28 @@ export default function SigningPage() {
               </div>
             </div>
             
-            {/* Step Progress */}
+            {/* Step Progress - 3 steps */}
             <div className="flex items-center gap-1 sm:gap-2">
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
-                step === 'reading' 
+                step === 'verification' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'bg-primary/20 text-primary'
               }`}>
-                <FileText className="h-4 w-4" />
-                <span className="text-sm font-medium hidden sm:inline">Leitura</span>
+                <KeyRound className="h-4 w-4" />
+                <span className="text-sm font-medium hidden sm:inline">Verificação</span>
                 <span className="text-sm font-medium sm:hidden">1</span>
               </div>
-              <div className="w-6 h-0.5 bg-primary/30" />
+              <div className="w-4 sm:w-6 h-0.5 bg-primary/30" />
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
+                step === 'reading' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : step === 'signing' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+              }`}>
+                <FileText className="h-4 w-4" />
+                <span className="text-sm font-medium hidden sm:inline">Leitura</span>
+                <span className="text-sm font-medium sm:hidden">2</span>
+              </div>
+              <div className="w-4 sm:w-6 h-0.5 bg-primary/30" />
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
                 step === 'signing' 
                   ? 'bg-primary text-primary-foreground' 
@@ -472,7 +569,7 @@ export default function SigningPage() {
               }`}>
                 <Pen className="h-4 w-4" />
                 <span className="text-sm font-medium hidden sm:inline">Assinatura</span>
-                <span className="text-sm font-medium sm:hidden">2</span>
+                <span className="text-sm font-medium sm:hidden">3</span>
               </div>
             </div>
           </div>
@@ -481,7 +578,147 @@ export default function SigningPage() {
 
       <main className="container mx-auto max-w-4xl px-4 py-6 md:py-8">
         <AnimatePresence mode="wait">
-          {step === 'reading' ? (
+          {/* OTP Verification Step */}
+          {step === 'verification' && (
+            <motion.div
+              key="verification"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-center justify-center min-h-[60vh]"
+            >
+              <Card className="card-premium gold-border w-full max-w-md overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-primary to-primary/50" />
+                <CardHeader className="text-center pb-2">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", delay: 0.1 }}
+                    className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 gold-border"
+                  >
+                    <KeyRound className="h-8 w-8 text-primary" />
+                  </motion.div>
+                  <CardTitle className="text-xl">Verificação de Email</CardTitle>
+                  <CardDescription>
+                    Para sua segurança, precisamos verificar seu email antes de acessar o documento.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Signatory Info */}
+                  <div className="bg-muted/50 rounded-xl p-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Documento</p>
+                    <p className="font-medium text-primary">{contract?.title}</p>
+                    <div className="flex items-center justify-center gap-2 mt-3 text-sm text-muted-foreground">
+                      <User className="h-4 w-4" />
+                      <span>{signatory?.name}</span>
+                    </div>
+                  </div>
+
+                  {!otpSent ? (
+                    /* Send OTP Button */
+                    <div className="space-y-4">
+                      <p className="text-sm text-center text-muted-foreground">
+                        Um código de 6 dígitos será enviado para <span className="text-foreground font-medium">{otpEmailHint}</span>
+                      </p>
+                      <Button 
+                        onClick={sendOtp} 
+                        disabled={otpLoading}
+                        className="w-full btn-premium"
+                        size="lg"
+                      >
+                        {otpLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="h-4 w-4 mr-2" />
+                            Enviar Código de Verificação
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    /* OTP Input */
+                    <div className="space-y-4">
+                      <p className="text-sm text-center text-muted-foreground">
+                        Digite o código de 6 dígitos enviado para <span className="text-foreground font-medium">{otpEmailHint}</span>
+                      </p>
+                      
+                      <div className="flex justify-center">
+                        <InputOTP 
+                          value={otpValue} 
+                          onChange={setOtpValue}
+                          maxLength={6}
+                          disabled={otpLoading}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+
+                      {otpError && (
+                        <motion.p 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-sm text-destructive text-center"
+                        >
+                          {otpError}
+                        </motion.p>
+                      )}
+
+                      <Button 
+                        onClick={verifyOtp} 
+                        disabled={otpLoading || otpValue.length !== 6}
+                        className="w-full btn-premium"
+                        size="lg"
+                      >
+                        {otpLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Verificando...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4 mr-2" />
+                            Verificar Código
+                          </>
+                        )}
+                      </Button>
+
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtpValue('');
+                          setOtpError(null);
+                        }}
+                        disabled={otpLoading}
+                        className="w-full text-muted-foreground"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reenviar código
+                      </Button>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-center text-muted-foreground">
+                    O código expira em 10 minutos. Verifique também a pasta de spam.
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {step === 'reading' && (
             <motion.div
               key="reading"
               initial={{ opacity: 0, x: -20 }}
@@ -508,7 +745,10 @@ export default function SigningPage() {
                     
                     {/* Signatory Info */}
                     <div className="bg-muted/50 rounded-xl p-4 gold-border min-w-[200px]">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Assinante</p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                        <p className="text-xs text-emerald-500 font-medium">Email Verificado</p>
+                      </div>
                       <div className="flex items-center gap-3 mb-2">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                           <User className="h-4 w-4 text-primary" />
@@ -646,7 +886,9 @@ export default function SigningPage() {
                 </Card>
               </motion.div>
             </motion.div>
-          ) : (
+          )}
+
+          {step === 'signing' && (
             <motion.div
               key="signing"
               initial={{ opacity: 0, x: 20 }}

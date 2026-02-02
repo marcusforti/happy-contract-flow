@@ -73,6 +73,9 @@ export type Database = {
           email: string
           id: string
           name: string
+          otp_code: string | null
+          otp_expires_at: string | null
+          otp_verified_at: string | null
           signed_at: string | null
           signing_order: number
         }
@@ -83,6 +86,9 @@ export type Database = {
           email: string
           id?: string
           name: string
+          otp_code?: string | null
+          otp_expires_at?: string | null
+          otp_verified_at?: string | null
           signed_at?: string | null
           signing_order?: number
         }
@@ -93,6 +99,9 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          otp_code?: string | null
+          otp_expires_at?: string | null
+          otp_verified_at?: string | null
           signed_at?: string | null
           signing_order?: number
         }
