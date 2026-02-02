@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,11 +15,15 @@ import {
   AlertCircle,
   LogOut,
   Search,
-  Loader2,
   Trash2,
   TrendingUp,
   Users,
-  FileSignature
+  FileSignature,
+  X,
+  ArrowUpDown,
+  Filter,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -36,6 +40,17 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logoTransparent from '@/assets/logo-transparent.png';
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { ContractProgressBar } from '@/components/dashboard/ContractProgressBar';
+import { ExpirationBadge } from '@/components/dashboard/ExpirationBadge';
+import { useDebounce } from '@/hooks/useDebounce';
+
+interface Signatory {
+  id: string;
+  name: string;
+  email: string;
+  signed_at: string | null;
+}
 
 interface Contract {
   id: string;
@@ -44,7 +59,10 @@ interface Contract {
   status: 'draft' | 'pending' | 'partially_signed' | 'completed' | 'expired';
   created_at: string;
   expires_at: string | null;
+  contract_signatories?: Signatory[];
 }
+
+type SortOption = 'date_desc' | 'date_asc' | 'name_asc' | 'name_desc' | 'status';
 
 const statusConfig = {
   draft: { label: 'Rascunho', icon: FileText, color: 'bg-muted text-muted-foreground' },
@@ -54,6 +72,16 @@ const statusConfig = {
   expired: { label: 'Expirado', icon: AlertCircle, color: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
+const sortOptions = {
+  date_desc: 'Mais recentes',
+  date_asc: 'Mais antigos',
+  name_asc: 'Nome (A-Z)',
+  name_desc: 'Nome (Z-A)',
+  status: 'Por status',
+};
+
+const SORT_STORAGE_KEY = 'dashboard_sort_preference';
+
 export default function Dashboard() {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -61,6 +89,13 @@ export default function Dashboard() {
   const [loadingContracts, setLoadingContracts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortOption>(() => {
+    const saved = localStorage.getItem(SORT_STORAGE_KEY);
+    return (saved as SortOption) || 'date_desc';
+  });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const debouncedSearch = useDebounce(searchTerm, 300);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -74,10 +109,22 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, sortBy);
+  }, [sortBy]);
+
   const fetchContracts = async () => {
     const { data, error } = await supabase
       .from('contracts')
-      .select('*')
+      .select(`
+        *,
+        contract_signatories (
+          id,
+          name,
+          email,
+          signed_at
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -87,6 +134,8 @@ export default function Dashboard() {
   };
 
   const handleDeleteContract = async (contractId: string) => {
+    setDeletingId(contractId);
+    
     const { data: fields } = await supabase
       .from('signature_fields')
       .select('id')
@@ -109,29 +158,127 @@ export default function Dashboard() {
     if (error) {
       toast.error('Erro ao excluir contrato');
       console.error(error);
+      setDeletingId(null);
       return;
     }
 
     toast.success('Contrato excluído com sucesso');
-    setContracts(contracts.filter(c => c.id !== contractId));
+    
+    // Animação de saída antes de remover
+    setTimeout(() => {
+      setContracts(contracts.filter(c => c.id !== contractId));
+      setDeletingId(null);
+    }, 300);
   };
 
-  const filteredContracts = contracts.filter(contract => {
-    const matchesSearch = contract.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || contract.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleStatsClick = (filter: string) => {
+    setStatusFilter(filter);
+    setSearchTerm('');
+  };
 
-  const stats = {
+  const clearSearch = () => {
+    setSearchTerm('');
+  };
+
+  const filteredAndSortedContracts = useMemo(() => {
+    let filtered = contracts.filter(contract => {
+      const matchesSearch = contract.title.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || 
+        (statusFilter === 'pending_all' 
+          ? (contract.status === 'pending' || contract.status === 'partially_signed')
+          : contract.status === statusFilter);
+      return matchesSearch && matchesStatus;
+    });
+
+    // Ordenação
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date_desc':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'date_asc':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'name_asc':
+          return a.title.localeCompare(b.title);
+        case 'name_desc':
+          return b.title.localeCompare(a.title);
+        case 'status':
+          const statusOrder = ['pending', 'partially_signed', 'draft', 'completed', 'expired'];
+          return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [contracts, debouncedSearch, statusFilter, sortBy]);
+
+  const stats = useMemo(() => ({
     total: contracts.length,
     pending: contracts.filter(c => c.status === 'pending' || c.status === 'partially_signed').length,
     completed: contracts.filter(c => c.status === 'completed').length,
+  }), [contracts]);
+
+  const getEmptyStateContent = () => {
+    if (contracts.length === 0) {
+      return {
+        icon: <Sparkles className="h-10 w-10 text-primary" />,
+        title: 'Crie seu primeiro contrato',
+        description: 'Comece agora e experimente o poder da assinatura digital segura.',
+        showCTA: true,
+        ctaText: 'Criar meu primeiro contrato'
+      };
+    }
+    
+    if (statusFilter !== 'all' && filteredAndSortedContracts.length === 0) {
+      const filterLabels: Record<string, string> = {
+        pending_all: 'pendentes',
+        completed: 'concluídos',
+        draft: 'em rascunho',
+        expired: 'expirados'
+      };
+      return {
+        icon: <Filter className="h-10 w-10 text-muted-foreground" />,
+        title: 'Nenhum contrato encontrado',
+        description: `Você não tem contratos ${filterLabels[statusFilter] || 'com esse status'}.`,
+        showCTA: false,
+        showClearFilter: true
+      };
+    }
+    
+    if (debouncedSearch && filteredAndSortedContracts.length === 0) {
+      return {
+        icon: <Search className="h-10 w-10 text-muted-foreground" />,
+        title: 'Sem resultados',
+        description: `Nenhum contrato encontrado para "${debouncedSearch}".`,
+        showCTA: false,
+        showClearFilter: true
+      };
+    }
+
+    if (stats.completed === stats.total && stats.total > 0) {
+      return {
+        icon: <CheckCircle2 className="h-10 w-10 text-emerald-500" />,
+        title: 'Parabéns! 🎉',
+        description: 'Todos os seus contratos foram concluídos com sucesso.',
+        showCTA: true,
+        ctaText: 'Criar novo contrato'
+      };
+    }
+
+    return null;
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-50 border-b border-primary/20 bg-card/95 backdrop-blur-sm">
+          <div className="container mx-auto flex items-center justify-between px-6 py-4">
+            <img src={logoTransparent} alt="Regozoni Docs" className="h-10 w-auto" />
+          </div>
+        </header>
+        <main className="container mx-auto px-6 py-8">
+          <DashboardSkeleton />
+        </main>
       </div>
     );
   }
@@ -179,171 +326,319 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-6 md:grid-cols-3 mb-10">
-          <Card className="card-premium group hover:gold-glow transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardDescription className="text-sm font-medium">Total de contratos</CardDescription>
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center gold-border group-hover:scale-110 transition-transform">
-                  <FileSignature className="h-5 w-5 text-primary" />
+        {/* Stats Cards - Clicáveis */}
+        {loadingContracts ? (
+          <div className="grid gap-6 md:grid-cols-3 mb-10">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="card-premium">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                      <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+                    </div>
+                    <div className="h-12 w-12 rounded-lg bg-muted animate-pulse" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-3 mb-10">
+            <Card 
+              className={`card-premium group cursor-pointer transition-all duration-300 ${
+                statusFilter === 'all' ? 'gold-glow ring-2 ring-primary/50' : 'hover:gold-glow'
+              }`}
+              onClick={() => handleStatsClick('all')}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-sm font-medium">Total de contratos</CardDescription>
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center gold-border group-hover:scale-110 transition-transform">
+                    <FileSignature className="h-5 w-5 text-primary" />
+                  </div>
                 </div>
-              </div>
-              <CardTitle className="text-4xl font-bold gold-text">{stats.total}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <TrendingUp className="h-3 w-3 text-emerald-500" />
-                Documentos criados
-              </p>
-            </CardContent>
-          </Card>
+                <CardTitle className="text-4xl font-bold gold-text">{stats.total}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3 text-emerald-500" />
+                  Documentos criados
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card className="card-premium group hover:gold-glow transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardDescription className="text-sm font-medium">Pendentes</CardDescription>
-                <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/30 group-hover:scale-110 transition-transform">
-                  <Clock className="h-5 w-5 text-amber-500" />
+            <Card 
+              className={`card-premium group cursor-pointer transition-all duration-300 ${
+                statusFilter === 'pending_all' ? 'ring-2 ring-amber-500/50' : 'hover:gold-glow'
+              }`}
+              onClick={() => handleStatsClick('pending_all')}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-sm font-medium">Pendentes</CardDescription>
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/30 group-hover:scale-110 transition-transform">
+                    <Clock className="h-5 w-5 text-amber-500" />
+                  </div>
                 </div>
-              </div>
-              <CardTitle className="text-4xl font-bold text-amber-500">{stats.pending}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Users className="h-3 w-3 text-amber-500" />
-                Aguardando assinaturas
-              </p>
-            </CardContent>
-          </Card>
+                <CardTitle className="text-4xl font-bold text-amber-500">{stats.pending}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Users className="h-3 w-3 text-amber-500" />
+                  Aguardando assinaturas
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card className="card-premium group hover:gold-glow transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardDescription className="text-sm font-medium">Concluídos</CardDescription>
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 group-hover:scale-110 transition-transform">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <Card 
+              className={`card-premium group cursor-pointer transition-all duration-300 ${
+                statusFilter === 'completed' ? 'ring-2 ring-emerald-500/50' : 'hover:gold-glow'
+              }`}
+              onClick={() => handleStatsClick('completed')}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-sm font-medium">Concluídos</CardDescription>
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 group-hover:scale-110 transition-transform">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  </div>
                 </div>
-              </div>
-              <CardTitle className="text-4xl font-bold text-emerald-500">{stats.completed}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                Totalmente assinados
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+                <CardTitle className="text-4xl font-bold text-emerald-500">{stats.completed}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                  Totalmente assinados
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* Actions & Filters */}
-        <div className="flex flex-col lg:flex-row gap-4 mb-8">
-          <Button asChild size="lg" className="btn-gold lg:w-auto">
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+          <Button 
+            asChild 
+            className="btn-gold h-14 justify-start px-5 group"
+          >
             <Link to="/contracts/new">
-              <Plus className="h-5 w-5 mr-2" />
-              Novo Contrato
+              <Plus className="h-5 w-5 mr-3" />
+              <span className="font-medium">Novo Contrato</span>
+              <ArrowRight className="h-4 w-4 ml-auto opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
             </Link>
           </Button>
           
-          <div className="flex flex-1 gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar contratos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-11 h-11 bg-card border-primary/20 focus:border-primary/50"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px] h-11 bg-card border-primary/20">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="draft">Rascunho</SelectItem>
-                <SelectItem value="pending">Aguardando</SelectItem>
-                <SelectItem value="partially_signed">Em andamento</SelectItem>
-                <SelectItem value="completed">Concluído</SelectItem>
-                <SelectItem value="expired">Expirado</SelectItem>
-              </SelectContent>
-            </Select>
+          <Button 
+            variant="outline"
+            className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 ${
+              statusFilter === 'pending_all' ? 'bg-primary/10' : ''
+            }`}
+            onClick={() => handleStatsClick(statusFilter === 'pending_all' ? 'all' : 'pending_all')}
+          >
+            <Clock className="h-5 w-5 mr-3 text-amber-500" />
+            <span className="font-medium">Contratos Pendentes</span>
+            {stats.pending > 0 && (
+              <Badge className="ml-auto bg-amber-500/20 text-amber-500 border-amber-500/30">
+                {stats.pending}
+              </Badge>
+            )}
+          </Button>
+          
+          <Button 
+            variant="outline"
+            className={`h-14 justify-start px-5 gold-border hover:bg-primary/5 ${
+              statusFilter === 'completed' ? 'bg-primary/10' : ''
+            }`}
+            onClick={() => handleStatsClick(statusFilter === 'completed' ? 'all' : 'completed')}
+          >
+            <CheckCircle2 className="h-5 w-5 mr-3 text-emerald-500" />
+            <span className="font-medium">Concluídos Recentes</span>
+            {stats.completed > 0 && (
+              <Badge className="ml-auto bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                {stats.completed}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Search & Filters */}
+        <div className="flex flex-col lg:flex-row gap-4 mb-8">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contratos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-11 pr-10 h-11 bg-card border-primary/20 focus:border-primary/50"
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={clearSearch}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
+          
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full lg:w-[180px] h-11 bg-card border-primary/20">
+              <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="draft">Rascunho</SelectItem>
+              <SelectItem value="pending">Aguardando</SelectItem>
+              <SelectItem value="partially_signed">Em andamento</SelectItem>
+              <SelectItem value="completed">Concluído</SelectItem>
+              <SelectItem value="expired">Expirado</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+            <SelectTrigger className="w-full lg:w-[180px] h-11 bg-card border-primary/20">
+              <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(sortOptions).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Section Title */}
         <div className="flex items-center gap-3 mb-6">
           <div className="h-8 w-1 bg-primary rounded-full" />
           <h2 className="text-xl font-semibold">Seus Contratos</h2>
-          <span className="text-sm text-muted-foreground">({filteredContracts.length})</span>
+          <span className="text-sm text-muted-foreground">({filteredAndSortedContracts.length})</span>
+          {(statusFilter !== 'all' || debouncedSearch) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground hover:text-foreground"
+              onClick={() => { setStatusFilter('all'); setSearchTerm(''); }}
+            >
+              <X className="h-4 w-4 mr-1" />
+              Limpar filtros
+            </Button>
+          )}
         </div>
 
         {/* Contracts List */}
         {loadingContracts ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="card-premium">
+                <CardHeader className="pb-3">
+                  <div className="space-y-2">
+                    <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
+                    <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="h-6 w-20 bg-muted rounded-full animate-pulse" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        ) : filteredContracts.length === 0 ? (
-          <Card className="py-16 card-premium border-dashed">
-            <CardContent className="text-center">
-              <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6 gold-border">
-                <FileText className="h-10 w-10 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Nenhum contrato encontrado</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                {contracts.length === 0 
-                  ? 'Comece criando seu primeiro contrato e experimente o poder da assinatura digital.' 
-                  : 'Tente ajustar os filtros de busca para encontrar o que procura.'}
-              </p>
-              {contracts.length === 0 && (
-                <Button asChild size="lg" className="btn-gold">
-                  <Link to="/contracts/new">
-                    <Plus className="h-5 w-5 mr-2" />
-                    Criar meu primeiro contrato
-                  </Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+        ) : filteredAndSortedContracts.length === 0 ? (
+          (() => {
+            const emptyState = getEmptyStateContent();
+            if (!emptyState) return null;
+            
+            return (
+              <Card className="py-16 card-premium border-dashed">
+                <CardContent className="text-center">
+                  <div className="h-20 w-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6 gold-border">
+                    {emptyState.icon}
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">{emptyState.title}</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    {emptyState.description}
+                  </p>
+                  {emptyState.showCTA && (
+                    <Button asChild size="lg" className="btn-gold">
+                      <Link to="/contracts/new">
+                        <Plus className="h-5 w-5 mr-2" />
+                        {emptyState.ctaText}
+                      </Link>
+                    </Button>
+                  )}
+                  {emptyState.showClearFilter && (
+                    <Button 
+                      variant="outline" 
+                      size="lg" 
+                      className="gold-border"
+                      onClick={() => { setStatusFilter('all'); setSearchTerm(''); }}
+                    >
+                      <X className="h-5 w-5 mr-2" />
+                      Limpar filtros
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()
         ) : (
-          <div className="grid gap-4">
-            {filteredContracts.map((contract, index) => {
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredAndSortedContracts.map((contract, index) => {
               const config = statusConfig[contract.status];
               const StatusIcon = config.icon;
+              const isDeleting = deletingId === contract.id;
+              
               return (
                 <Card 
                   key={contract.id} 
-                  className="card-premium hover:gold-glow transition-all duration-300 group animate-fade-in"
+                  className={`card-premium hover:gold-glow transition-all duration-300 group animate-fade-in ${
+                    isDeleting ? 'opacity-0 scale-95' : ''
+                  }`}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-5 gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center gold-border group-hover:scale-105 transition-transform">
-                        <FileText className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
                           {contract.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(contract.created_at), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                        </p>
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-1">
+                          {format(new Date(contract.created_at), "d 'de' MMM, yyyy", { locale: ptBR })}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <ExpirationBadge 
+                          expiresAt={contract.expires_at} 
+                          status={contract.status} 
+                        />
+                        <Badge 
+                          variant="outline" 
+                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 ${config.color}`}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          <span className="hidden sm:inline">{config.label}</span>
+                        </Badge>
                       </div>
                     </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pt-0 space-y-4">
+                    {/* Progress Bar */}
+                    {contract.contract_signatories && contract.contract_signatories.length > 0 && (
+                      <ContractProgressBar signatories={contract.contract_signatories} />
+                    )}
                     
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <Badge 
-                        variant="outline" 
-                        className={`flex items-center gap-1.5 px-3 py-1.5 ${config.color}`}
-                      >
-                        <StatusIcon className="h-3.5 w-3.5" />
-                        {config.label}
-                      </Badge>
-                      
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/50">
                       <Button 
                         variant="outline" 
+                        size="sm"
                         asChild 
-                        className="gold-border hover:bg-primary/10"
+                        className="flex-1 gold-border hover:bg-primary/10 h-9"
                       >
                         <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
                       </Button>
@@ -353,7 +648,7 @@ export default function Dashboard() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -362,7 +657,7 @@ export default function Dashboard() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Excluir contrato</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tem certeza que deseja excluir o contrato <span className="text-foreground font-medium">"{contract.title}"</span>? Esta ação não pode ser desfeita e todos os dados relacionados serão perdidos.
+                              Tem certeza que deseja excluir o contrato <span className="text-foreground font-medium">"{contract.title}"</span>? Esta ação não pode ser desfeita.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -371,7 +666,7 @@ export default function Dashboard() {
                               onClick={() => handleDeleteContract(contract.id)}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
-                              Excluir permanentemente
+                              Excluir
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>

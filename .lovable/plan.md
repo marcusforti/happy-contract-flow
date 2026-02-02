@@ -124,4 +124,3 @@ Um painel que:
 - Reduz o tempo para realizar ações comuns
 - Fornece informações importantes de forma proativa
 - Mantém a identidade visual premium da marca
-
