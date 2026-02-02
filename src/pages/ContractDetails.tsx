@@ -81,6 +81,7 @@ export default function ContractDetails() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -136,28 +137,83 @@ export default function ContractDetails() {
   };
 
   const sendForSigning = async () => {
-    if (!contract || !user) return;
+    if (!contract || !user || signatories.length === 0) return;
 
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'pending' })
-      .eq('id', contract.id);
+    setSending(true);
 
-    if (error) {
-      toast.error('Erro ao enviar contrato');
-      return;
+    try {
+      // Update contract status
+      const { error } = await supabase
+        .from('contracts')
+        .update({ status: 'pending' })
+        .eq('id', contract.id);
+
+      if (error) {
+        toast.error('Erro ao enviar contrato');
+        setSending(false);
+        return;
+      }
+
+      // Get sender name from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .single();
+
+      const senderName = profile?.full_name || user.email || 'Regozoni Docs';
+
+      // Send emails to all pending signatories
+      const pendingSignatories = signatories.filter(s => !s.signed_at);
+      let emailsSent = 0;
+      let emailsFailed = 0;
+
+      for (const signatory of pendingSignatories) {
+        const signingLink = `${window.location.origin}/sign/${signatory.access_token}`;
+        
+        const { data, error: emailError } = await supabase.functions.invoke('send-signing-email', {
+          body: {
+            to: signatory.email,
+            signatoryName: signatory.name,
+            contractTitle: contract.title,
+            signingLink,
+            senderName,
+          },
+        });
+
+        if (emailError || !data?.success) {
+          console.error(`Failed to send email to ${signatory.email}:`, emailError || data?.error);
+          emailsFailed++;
+        } else {
+          emailsSent++;
+        }
+      }
+
+      // Log audit
+      await supabase.from('audit_logs').insert({
+        contract_id: contract.id,
+        user_id: user.id,
+        action: 'sent',
+        ip_address: 'N/A',
+        user_agent: navigator.userAgent,
+        metadata: { emails_sent: emailsSent, emails_failed: emailsFailed },
+      });
+
+      if (emailsFailed > 0 && emailsSent > 0) {
+        toast.warning(`Contrato enviado! ${emailsSent} email(s) enviado(s), ${emailsFailed} falhou(aram).`);
+      } else if (emailsFailed > 0) {
+        toast.error('Contrato enviado, mas falha ao enviar emails. Os signatários podem usar os links copiados manualmente.');
+      } else {
+        toast.success(`Contrato enviado! ${emailsSent} email(s) enviado(s) para os signatários.`);
+      }
+
+      fetchContractData();
+    } catch (err) {
+      console.error('Error sending for signing:', err);
+      toast.error('Erro inesperado ao enviar contrato');
     }
 
-    await supabase.from('audit_logs').insert({
-      contract_id: contract.id,
-      user_id: user.id,
-      action: 'sent',
-      ip_address: 'N/A',
-      user_agent: navigator.userAgent,
-    });
-
-    toast.success('Contrato enviado para assinatura! Os signatários podem usar seus links para assinar.');
-    fetchContractData();
+    setSending(false);
   };
 
   const downloadDocument = async () => {
@@ -393,9 +449,17 @@ export default function ContractDetails() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {contract.status === 'draft' && (
-                  <Button className="w-full btn-gold" onClick={sendForSigning}>
-                    <Send className="h-4 w-4 mr-2" />
-                    Enviar para assinatura
+                  <Button 
+                    className="w-full btn-gold" 
+                    onClick={sendForSigning}
+                    disabled={sending}
+                  >
+                    {sending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    {sending ? 'Enviando...' : 'Enviar para assinatura'}
                   </Button>
                 )}
                 {contract.file_path && (
