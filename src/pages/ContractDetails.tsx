@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft, 
-  FileSignature, 
+  Scale, 
   FileText, 
   Clock, 
   CheckCircle2, 
@@ -57,9 +57,9 @@ interface AuditLog {
 
 const statusConfig = {
   draft: { label: 'Rascunho', icon: FileText, variant: 'secondary' as const, color: 'text-muted-foreground' },
-  pending: { label: 'Aguardando assinaturas', icon: Clock, variant: 'outline' as const, color: 'text-amber-600' },
-  partially_signed: { label: 'Parcialmente assinado', icon: AlertCircle, variant: 'default' as const, color: 'text-blue-600' },
-  completed: { label: 'Concluído', icon: CheckCircle2, variant: 'default' as const, color: 'text-green-600' },
+  pending: { label: 'Aguardando assinaturas', icon: Clock, variant: 'outline' as const, color: 'text-amber-500' },
+  partially_signed: { label: 'Parcialmente assinado', icon: AlertCircle, variant: 'default' as const, color: 'text-blue-500' },
+  completed: { label: 'Concluído', icon: CheckCircle2, variant: 'default' as const, color: 'text-emerald-500' },
   expired: { label: 'Expirado', icon: AlertCircle, variant: 'destructive' as const, color: 'text-destructive' },
 };
 
@@ -226,7 +226,7 @@ export default function ContractDetails() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
+      <header className="border-b border-primary/20 bg-card">
         <div className="container mx-auto flex items-center gap-4 px-4 py-4">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/dashboard">
@@ -251,10 +251,10 @@ export default function ContractDetails() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Contract Info */}
-            <Card>
+            <Card className="card-premium">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
+                  <FileText className="h-5 w-5 text-primary" />
                   Detalhes do Contrato
                 </CardTitle>
               </CardHeader>
@@ -287,10 +287,10 @@ export default function ContractDetails() {
             </Card>
 
             {/* Signatories */}
-            <Card>
+            <Card className="card-premium">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
+                  <User className="h-5 w-5 text-primary" />
                   Signatários ({signedCount}/{signatories.length})
                 </CardTitle>
                 <CardDescription>
@@ -300,9 +300,9 @@ export default function ContractDetails() {
               <CardContent>
                 <div className="space-y-4">
                   {signatories.map((signatory, index) => (
-                    <div key={signatory.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={signatory.id} className="flex items-center justify-between p-4 border border-primary/20 rounded-lg">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium gold-border">
                           {index + 1}
                         </div>
                         <div>
@@ -312,7 +312,7 @@ export default function ContractDetails() {
                       </div>
                       <div className="flex items-center gap-2">
                         {signatory.signed_at ? (
-                          <Badge variant="default" className="bg-green-600">
+                          <Badge variant="default" className="bg-emerald-600">
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             Assinado
                           </Badge>
@@ -347,10 +347,10 @@ export default function ContractDetails() {
             </Card>
 
             {/* Audit Trail */}
-            <Card>
+            <Card className="card-premium">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <History className="h-5 w-5" />
+                  <History className="h-5 w-5 text-primary" />
                   Trilha de Auditoria
                 </CardTitle>
                 <CardDescription>
@@ -363,7 +363,7 @@ export default function ContractDetails() {
                 ) : (
                   <div className="space-y-4">
                     {auditLogs.map((log) => (
-                      <div key={log.id} className="flex gap-4 pb-4 border-b last:border-0 last:pb-0">
+                      <div key={log.id} className="flex gap-4 pb-4 border-b border-primary/10 last:border-0 last:pb-0">
                         <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
                         <div className="flex-1">
                           <p className="font-medium">{actionLabels[log.action] || log.action}</p>
@@ -387,13 +387,13 @@ export default function ContractDetails() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Actions */}
-            <Card>
+            <Card className="card-premium gold-border">
               <CardHeader>
                 <CardTitle>Ações</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {contract.status === 'draft' && (
-                  <Button className="w-full" onClick={sendForSigning}>
+                  <Button className="w-full btn-gold" onClick={sendForSigning}>
                     <Send className="h-4 w-4 mr-2" />
                     Enviar para assinatura
                   </Button>
@@ -401,7 +401,7 @@ export default function ContractDetails() {
                 {contract.file_path && (
                   <Button 
                     variant="outline" 
-                    className="w-full" 
+                    className="w-full gold-border" 
                     onClick={downloadDocument}
                     disabled={downloading}
                   >
@@ -414,8 +414,8 @@ export default function ContractDetails() {
                   </Button>
                 )}
                 {contract.status === 'completed' && (
-                  <Button variant="outline" className="w-full">
-                    <FileSignature className="h-4 w-4 mr-2" />
+                  <Button variant="outline" className="w-full gold-border">
+                    <Scale className="h-4 w-4 mr-2" />
                     Baixar certificado
                   </Button>
                 )}
@@ -423,7 +423,7 @@ export default function ContractDetails() {
             </Card>
 
             {/* Status Summary */}
-            <Card>
+            <Card className="card-premium">
               <CardHeader>
                 <CardTitle>Resumo</CardTitle>
               </CardHeader>
@@ -432,18 +432,18 @@ export default function ContractDetails() {
                   <span className="text-muted-foreground">Status</span>
                   <span className={config.color}>{config.label}</span>
                 </div>
-                <Separator />
+                <Separator className="bg-primary/20" />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Signatários</span>
                   <span>{signatories.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assinados</span>
-                  <span className="text-green-600">{signedCount}</span>
+                  <span className="text-emerald-500">{signedCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pendentes</span>
-                  <span className="text-amber-600">{signatories.length - signedCount}</span>
+                  <span className="text-amber-500">{signatories.length - signedCount}</span>
                 </div>
               </CardContent>
             </Card>

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  FileSignature, 
+  Scale, 
   Plus, 
   FileText, 
   Clock, 
@@ -93,11 +93,13 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
+      <header className="border-b border-primary/20 bg-card">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
-            <FileSignature className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">SignDoc</span>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center gold-border">
+              <Scale className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-xl font-bold gold-text">Regozoni Docs</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
@@ -113,29 +115,29 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-8">
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3 mb-8">
-          <Card>
+          <Card className="card-premium">
             <CardHeader className="pb-2">
               <CardDescription>Total de contratos</CardDescription>
-              <CardTitle className="text-3xl">{stats.total}</CardTitle>
+              <CardTitle className="text-3xl gold-text">{stats.total}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
+          <Card className="card-premium">
             <CardHeader className="pb-2">
               <CardDescription>Pendentes</CardDescription>
-              <CardTitle className="text-3xl text-amber-600">{stats.pending}</CardTitle>
+              <CardTitle className="text-3xl text-amber-500">{stats.pending}</CardTitle>
             </CardHeader>
           </Card>
-          <Card>
+          <Card className="card-premium">
             <CardHeader className="pb-2">
               <CardDescription>Concluídos</CardDescription>
-              <CardTitle className="text-3xl text-green-600">{stats.completed}</CardTitle>
+              <CardTitle className="text-3xl text-emerald-500">{stats.completed}</CardTitle>
             </CardHeader>
           </Card>
         </div>
 
         {/* Actions & Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <Button asChild className="sm:w-auto">
+          <Button asChild className="sm:w-auto btn-gold">
             <Link to="/contracts/new">
               <Plus className="h-4 w-4 mr-2" />
               Novo Contrato
@@ -173,7 +175,7 @@ export default function Dashboard() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : filteredContracts.length === 0 ? (
-          <Card className="py-12">
+          <Card className="py-12 card-premium">
             <CardContent className="text-center">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">Nenhum contrato encontrado</h3>
@@ -183,7 +185,7 @@ export default function Dashboard() {
                   : 'Tente ajustar os filtros de busca'}
               </p>
               {contracts.length === 0 && (
-                <Button asChild>
+                <Button asChild className="btn-gold">
                   <Link to="/contracts/new">
                     <Plus className="h-4 w-4 mr-2" />
                     Criar Contrato
@@ -198,10 +200,10 @@ export default function Dashboard() {
               const config = statusConfig[contract.status];
               const StatusIcon = config.icon;
               return (
-                <Card key={contract.id} className="hover:shadow-md transition-shadow">
+                <Card key={contract.id} className="card-premium hover:gold-glow transition-shadow">
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 gold-border">
                         <FileText className="h-5 w-5 text-primary" />
                       </div>
                       <div>
@@ -216,7 +218,7 @@ export default function Dashboard() {
                         <StatusIcon className="h-3 w-3" />
                         {config.label}
                       </Badge>
-                      <Button variant="outline" asChild>
+                      <Button variant="outline" asChild className="gold-border">
                         <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
                       </Button>
                     </div>

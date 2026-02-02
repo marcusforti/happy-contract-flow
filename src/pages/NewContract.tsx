@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Upload, FileSignature, CalendarIcon, Loader2, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, Scale, CalendarIcon, Loader2, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -233,7 +233,7 @@ export default function NewContract() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
+      <header className="border-b border-primary/20 bg-card">
         <div className="container mx-auto flex items-center gap-4 px-4 py-4">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/dashboard">
@@ -241,7 +241,7 @@ export default function NewContract() {
             </Link>
           </Button>
           <div className="flex items-center gap-2">
-            <FileSignature className="h-6 w-6 text-primary" />
+            <Scale className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">Novo Contrato</span>
           </div>
         </div>
@@ -257,7 +257,7 @@ export default function NewContract() {
             {step === 'form' ? <CheckCircle2 className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
             <span className="text-sm font-medium">1. Upload</span>
           </div>
-          <div className="w-8 h-0.5 bg-border" />
+          <div className="w-8 h-0.5 bg-primary/30" />
           <div className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-full transition-colors",
             step === 'form' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
@@ -268,7 +268,7 @@ export default function NewContract() {
         </div>
 
         {step === 'upload' && (
-          <Card>
+          <Card className="card-premium gold-border">
             <CardHeader className="text-center">
               <CardTitle className="flex items-center justify-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -279,7 +279,7 @@ export default function NewContract() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+              <div className="border-2 border-dashed border-primary/30 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
                 <input
                   type="file"
                   accept=".pdf"
@@ -320,7 +320,7 @@ export default function NewContract() {
                 <div className="space-y-3">
                   <Button 
                     onClick={analyzeContract} 
-                    className="w-full" 
+                    className="w-full btn-gold" 
                     size="lg"
                     disabled={isAnalyzing}
                   >
@@ -339,7 +339,7 @@ export default function NewContract() {
                   <Button 
                     onClick={skipAnalysis} 
                     variant="outline" 
-                    className="w-full"
+                    className="w-full gold-border"
                     disabled={isAnalyzing}
                   >
                     Pular e preencher manualmente
@@ -381,7 +381,7 @@ export default function NewContract() {
               )}
 
               {/* Contract Info */}
-              <Card>
+              <Card className="card-premium">
                 <CardHeader>
                   <CardTitle>Informações do Contrato</CardTitle>
                   <CardDescription>
@@ -479,11 +479,12 @@ export default function NewContract() {
                                 onSelect={field.onChange}
                                 disabled={(date) => date < new Date()}
                                 initialFocus
+                                locale={ptBR}
                               />
                             </PopoverContent>
                           </Popover>
                           <FormDescription>
-                            Opcional - o contrato expira após esta data
+                            Opcional - deixe em branco para sem expiração
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -494,23 +495,26 @@ export default function NewContract() {
               </Card>
 
               {/* Signatories */}
-              <Card>
+              <Card className="card-premium">
                 <CardHeader>
                   <CardTitle>Signatários</CardTitle>
                   <CardDescription>
-                    Complete os emails dos signatários identificados
+                    Adicione as pessoas que devem assinar o contrato
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {fields.map((field, index) => (
-                    <div key={field.id} className="flex gap-4 items-start p-4 border rounded-lg">
+                    <div key={field.id} className="flex gap-4 items-start p-4 border border-primary/20 rounded-lg">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0 gold-border">
+                        {index + 1}
+                      </div>
                       <div className="flex-1 grid gap-4 sm:grid-cols-2">
                         <FormField
                           control={form.control}
                           name={`signatories.${index}.name`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Nome</FormLabel>
+                              <FormLabel>Nome *</FormLabel>
                               <FormControl>
                                 <Input placeholder="Nome completo" {...field} />
                               </FormControl>
@@ -538,19 +542,19 @@ export default function NewContract() {
                           variant="ghost"
                           size="icon"
                           onClick={() => remove(index)}
-                          className="mt-8"
+                          className="shrink-0 text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
                   ))}
-
+                  
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => append({ name: '', email: '' })}
-                    className="w-full"
+                    className="w-full gold-border"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Adicionar signatário
@@ -559,13 +563,28 @@ export default function NewContract() {
               </Card>
 
               {/* Submit */}
-              <div className="flex justify-end gap-4">
-                <Button type="button" variant="outline" onClick={() => setStep('upload')}>
-                  Voltar
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/dashboard')}
+                  className="flex-1"
+                >
+                  Cancelar
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Criar Contrato
+                <Button 
+                  type="submit" 
+                  className="flex-1 btn-gold"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Criando...
+                    </>
+                  ) : (
+                    'Criar Contrato'
+                  )}
                 </Button>
               </div>
             </form>
