@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, type Variants } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,54 @@ import logoTransparent from '@/assets/logo-transparent.png';
 import sidneyPhoto from '@/assets/sidney-regozoni.png';
 import heroVideo from '@/assets/hero-video.mp4';
 import heroMobileBg from '@/assets/hero-mobile-bg.jpg';
+
+// Animation variants for scroll reveal
+const fadeInUp: Variants = {
+  hidden: { opacity: 0, y: 40 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.6 }
+  }
+};
+
+const fadeInLeft: Variants = {
+  hidden: { opacity: 0, x: -40 },
+  visible: { 
+    opacity: 1, 
+    x: 0,
+    transition: { duration: 0.6 }
+  }
+};
+
+const fadeInRight: Variants = {
+  hidden: { opacity: 0, x: 40 },
+  visible: { 
+    opacity: 1, 
+    x: 0,
+    transition: { duration: 0.6 }
+  }
+};
+
+const staggerContainer: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.1
+    }
+  }
+};
+
+const scaleIn: Variants = {
+  hidden: { opacity: 0, scale: 0.8 },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { duration: 0.5 }
+  }
+};
 
 export default function Index() {
   const { user, loading } = useAuth();
@@ -185,52 +234,70 @@ export default function Index() {
       <section className="py-12 sm:py-24 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-card/50 to-background" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
-          <div className="text-center mb-8 sm:mb-16">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={fadeInUp}
+            className="text-center mb-8 sm:mb-16"
+          >
             <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3 sm:mb-4">
               <span className="gold-text">Recursos</span> que fazem diferença
             </h2>
             <p className="text-muted-foreground text-sm sm:text-lg max-w-2xl mx-auto px-4">
               Tecnologia de ponta a serviço da segurança jurídica
             </p>
-          </div>
+          </motion.div>
           
-          <div className="grid gap-4 sm:gap-8 md:grid-cols-3 max-w-5xl mx-auto">
-            <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0">
-              <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
-                <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
-                  <FileSignature className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Múltiplos signatários</h3>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  Adicione quantos signatários precisar, com ordem personalizada e rastreamento individual
-                </p>
-              </CardContent>
-            </Card>
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            variants={staggerContainer}
+            className="grid gap-4 sm:gap-8 md:grid-cols-3 max-w-5xl mx-auto"
+          >
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0 h-full">
+                <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
+                  <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
+                    <FileSignature className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Múltiplos signatários</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                    Adicione quantos signatários precisar, com ordem personalizada e rastreamento individual
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0">
-              <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
-                <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
-                  <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Validade jurídica</h3>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  Trilha de auditoria completa com IP, data/hora, hash e certificado de conclusão
-                </p>
-              </CardContent>
-            </Card>
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0 h-full">
+                <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
+                  <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
+                    <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Validade jurídica</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                    Trilha de auditoria completa com IP, data/hora, hash e certificado de conclusão
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0">
-              <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
-                <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Processo simplificado</h3>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  Assine de qualquer lugar, desenhando ou digitando. Sem complicação
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium hover:gold-glow transition-all duration-500 group border-0 h-full">
+                <CardContent className="pt-6 pb-6 px-5 sm:pt-8 sm:pb-8 sm:px-8">
+                  <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center mb-4 sm:mb-6 gold-border group-hover:scale-110 transition-transform duration-300">
+                    <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Processo simplificado</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                    Assine de qualquer lugar, desenhando ou digitando. Sem complicação
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
@@ -245,7 +312,13 @@ export default function Index() {
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
           <div className="grid lg:grid-cols-2 gap-8 sm:gap-16 items-center max-w-6xl mx-auto">
             {/* Photo */}
-            <div className="relative group order-2 lg:order-1">
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-100px" }}
+              variants={fadeInLeft}
+              className="relative group order-2 lg:order-1"
+            >
               <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-primary/5 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500" />
               <div className="relative overflow-hidden rounded-2xl gold-border">
                 <img 
@@ -259,11 +332,17 @@ export default function Index() {
                   <p className="text-muted-foreground text-sm sm:text-base">Advogado e Estrategista Jurídico</p>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Content */}
-            <div className="space-y-6 sm:space-y-8 order-1 lg:order-2">
-              <div>
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-100px" }}
+              variants={staggerContainer}
+              className="space-y-6 sm:space-y-8 order-1 lg:order-2"
+            >
+              <motion.div variants={fadeInRight}>
                 <span className="inline-block px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium bg-primary/10 text-primary gold-border mb-4 sm:mb-6">
                   O Idealizador
                 </span>
@@ -271,25 +350,25 @@ export default function Index() {
                   O jurídico só funciona quando
                   <span className="gold-text"> deixa de ser reativo</span>
                 </h2>
-              </div>
+              </motion.div>
 
-              <div className="relative pl-4 sm:pl-6 border-l-2 border-primary/30">
+              <motion.div variants={fadeInRight} className="relative pl-4 sm:pl-6 border-l-2 border-primary/30">
                 <Quote className="absolute -left-3 sm:-left-4 -top-2 h-6 w-6 sm:h-8 sm:w-8 text-primary/30" />
                 <p className="text-sm sm:text-lg text-muted-foreground leading-relaxed italic">
                   "Pessoas e empresas só procuram um advogado quando o problema já está caro, exposto e fora de controle."
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
+              <motion.div variants={fadeInRight} className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
                 <p>
                   Este sistema nasce para <span className="text-foreground font-medium">romper com esse modelo</span>. A proposta é oferecer acompanhamento jurídico contínuo, com foco em <span className="text-foreground font-medium">prevenção e proteção patrimonial</span>.
                 </p>
                 <p className="hidden sm:block">
                   Sidney não trabalha com promessas, slogans ou soluções genéricas. Sua abordagem é baseada em <span className="text-foreground font-medium">método, sobriedade e responsabilidade</span>.
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="pt-2 sm:pt-4">
+              <motion.div variants={scaleIn} className="pt-2 sm:pt-4">
                 <Card className="card-premium gold-border bg-primary/5">
                   <CardContent className="py-4 sm:py-6 px-4 sm:px-6">
                     <p className="text-foreground font-medium text-sm sm:text-lg text-center">
@@ -297,8 +376,8 @@ export default function Index() {
                     </p>
                   </CardContent>
                 </Card>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -307,17 +386,29 @@ export default function Index() {
       <section className="py-12 sm:py-24 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-card/30 to-background" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
-          <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-center mb-8 sm:mb-16">
+          <motion.h2 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={fadeInUp}
+            className="text-2xl sm:text-3xl md:text-5xl font-bold text-center mb-8 sm:mb-16"
+          >
             Como <span className="gold-text">funciona</span>
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 max-w-5xl mx-auto">
+          </motion.h2>
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            variants={staggerContainer}
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 max-w-5xl mx-auto"
+          >
             {[
               { step: 1, title: 'Crie o contrato', desc: 'Faça upload do PDF' },
               { step: 2, title: 'Adicione signatários', desc: 'Informe quem deve assinar' },
               { step: 3, title: 'Envie para assinatura', desc: 'Link único e seguro' },
               { step: 4, title: 'Documento certificado', desc: 'Com trilha de auditoria' },
             ].map((item, index) => (
-              <div key={item.step} className="text-center group">
+              <motion.div key={item.step} variants={scaleIn} className="text-center group">
                 <div className="relative mb-3 sm:mb-6">
                   <div className="h-10 w-10 sm:h-16 sm:w-16 rounded-full bg-primary text-primary-foreground font-bold text-lg sm:text-2xl flex items-center justify-center mx-auto gold-glow group-hover:scale-110 transition-transform duration-300">
                     {item.step}
@@ -328,9 +419,9 @@ export default function Index() {
                 </div>
                 <h3 className="font-bold text-sm sm:text-lg mb-1 sm:mb-2">{item.title}</h3>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -338,22 +429,30 @@ export default function Index() {
       <section className="py-12 sm:py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-primary/5" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={staggerContainer}
+            className="max-w-4xl mx-auto text-center"
+          >
+            <motion.h2 variants={fadeInUp} className="text-2xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6">
               Pronto para ter
               <br />
               <span className="gold-text">governo jurídico</span>?
-            </h2>
-            <p className="text-base sm:text-xl text-muted-foreground mb-6 sm:mb-10 max-w-2xl mx-auto px-4">
+            </motion.h2>
+            <motion.p variants={fadeInUp} className="text-base sm:text-xl text-muted-foreground mb-6 sm:mb-10 max-w-2xl mx-auto px-4">
               Menos improviso, menos surpresa, mais controle.
-            </p>
-            <Button size="lg" asChild className="btn-gold text-base sm:text-lg px-6 sm:px-10 py-5 sm:py-7">
-              <Link to="/auth">
-                Acessar a plataforma
-                <ArrowRight className="h-4 sm:h-5 w-4 sm:w-5 ml-2" />
-              </Link>
-            </Button>
-          </div>
+            </motion.p>
+            <motion.div variants={scaleIn}>
+              <Button size="lg" asChild className="btn-gold text-base sm:text-lg px-6 sm:px-10 py-5 sm:py-7">
+                <Link to="/auth">
+                  Acessar a plataforma
+                  <ArrowRight className="h-4 sm:h-5 w-4 sm:w-5 ml-2" />
+                </Link>
+              </Button>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
