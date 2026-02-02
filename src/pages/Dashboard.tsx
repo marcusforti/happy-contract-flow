@@ -16,8 +16,21 @@ import {
   AlertCircle,
   LogOut,
   Search,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -68,6 +81,44 @@ export default function Dashboard() {
       setContracts(data);
     }
     setLoadingContracts(false);
+  };
+
+  const handleDeleteContract = async (contractId: string) => {
+    // Delete related data first (due to foreign key constraints)
+    // Delete signatures (via signature_fields)
+    const { data: fields } = await supabase
+      .from('signature_fields')
+      .select('id')
+      .eq('contract_id', contractId);
+    
+    if (fields && fields.length > 0) {
+      const fieldIds = fields.map(f => f.id);
+      await supabase.from('signatures').delete().in('field_id', fieldIds);
+    }
+    
+    // Delete signature fields
+    await supabase.from('signature_fields').delete().eq('contract_id', contractId);
+    
+    // Delete audit logs
+    await supabase.from('audit_logs').delete().eq('contract_id', contractId);
+    
+    // Delete signatories
+    await supabase.from('contract_signatories').delete().eq('contract_id', contractId);
+    
+    // Finally delete the contract
+    const { error } = await supabase
+      .from('contracts')
+      .delete()
+      .eq('id', contractId);
+
+    if (error) {
+      toast.error('Erro ao excluir contrato');
+      console.error(error);
+      return;
+    }
+
+    toast.success('Contrato excluído com sucesso');
+    setContracts(contracts.filter(c => c.id !== contractId));
   };
 
   const filteredContracts = contracts.filter(contract => {
@@ -213,7 +264,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                       <Badge variant={config.variant} className="flex items-center gap-1">
                         <StatusIcon className="h-3 w-3" />
                         {config.label}
@@ -221,6 +272,30 @@ export default function Dashboard() {
                       <Button variant="outline" asChild className="gold-border">
                         <Link to={`/contracts/${contract.id}`}>Ver detalhes</Link>
                       </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir contrato</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir o contrato "{contract.title}"? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => handleDeleteContract(contract.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </CardContent>
                 </Card>
