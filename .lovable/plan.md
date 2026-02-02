@@ -1,55 +1,105 @@
 
 
-## Implementar Download de Documento
+## Branding Exclusivo - Dr. Sidney Regozoni
 
-### Problema Atual
-O botão "Baixar documento" na página de detalhes do contrato (`ContractDetails.tsx`) está sem funcionalidade - não tem evento `onClick` conectado.
+### Visao Geral
 
-### Solução
+Transformacao completa da identidade visual da plataforma SignDoc para criar uma ferramenta exclusiva e premium alinhada com a marca pessoal do Dr. Sidney Regozoni.
 
-Adicionar uma função `downloadDocument` que:
-1. Busca o arquivo do storage usando URL assinada (já que o bucket é privado)
-2. Faz o download do arquivo para o usuário
-3. Registra a ação na trilha de auditoria
+### Paleta de Cores
 
-### Alterações no Arquivo
+Baseada no perfil do Instagram do cliente:
 
-**src/pages/ContractDetails.tsx**
+| Elemento | Cor Atual | Nova Cor (HSL) |
+|----------|-----------|----------------|
+| Background | Branco | Preto profundo (#0A0A0A) |
+| Foreground | Escuro | Branco/Cinza claro |
+| Primary | Azul escuro | Dourado (#D4AF37) |
+| Accent | Cinza | Dourado escuro (#B8860B) |
+| Cards | Branco | Cinza escuro (#1A1A1A) |
+| Borders | Cinza claro | Cinza escuro/Dourado sutil |
 
-1. Adicionar estado de loading para download
-2. Criar função `downloadDocument`:
-   - Gerar URL assinada do storage (válida por 60 segundos)
-   - Fazer fetch do arquivo
-   - Criar blob e disparar download
-   - Registrar audit log
-3. Conectar função ao botão existente
+### Identidade da Marca
 
-### Detalhes Técnicos
+**Nome Sugerido**: "Regozoni Docs" ou "Smart Legal Sign" (baseado no logo SMART que aparece nos videos)
+
+**Elementos**:
+- Logo customizado com as iniciais "SR" ou escudo juridico
+- Tipografia elegante e profissional
+- Icones com bordas douradas sutis
+
+### Arquivos a Modificar
+
+**1. src/index.css** - Sistema de cores
+- Remover tema claro (deixar apenas dark mode)
+- Redefinir todas as variaveis CSS para a nova paleta
+- Adicionar gradientes dourados
+
+**2. src/pages/Index.tsx** - Landing Page
+- Novo header com logo/nome personalizado
+- Hero section com visual premium
+- Features cards com bordas douradas
+- Footer com creditos "by Sidney Regozoni"
+
+**3. src/pages/Auth.tsx** - Pagina de Login
+- Card com borda dourada sutil
+- Logo personalizado no topo
+- Visual mais elegante
+
+**4. src/pages/Dashboard.tsx** - Painel Principal
+- Header com marca personalizada
+- Cards com visual premium
+- Estatisticas com destaque dourado
+
+**5. src/pages/SigningPage.tsx** - Pagina de Assinatura
+- Branding visivel para quem recebe o contrato
+- Visual profissional e confiavel
+
+**6. Outros arquivos**
+- ContractDetails.tsx
+- NewContract.tsx
+
+### Detalhes Tecnicos
 
 ```text
-Fluxo de Download:
-┌─────────────────┐
-│  Clica Botão    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Gera URL        │
-│ Assinada (60s)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Fetch + Blob    │
-│ Download        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Audit Log       │
-│ "downloaded"    │
-└─────────────────┘
+Nova Paleta CSS:
+┌─────────────────────────────────────────┐
+│  :root (Dark Mode Only)                 │
+├─────────────────────────────────────────┤
+│  --background: 0 0% 4%      (#0A0A0A)   │
+│  --foreground: 0 0% 95%     (#F2F2F2)   │
+│  --card: 0 0% 8%            (#141414)   │
+│  --primary: 43 76% 52%      (#D4AF37)   │
+│  --accent: 43 76% 38%       (#B8860B)   │
+│  --muted: 0 0% 15%          (#262626)   │
+│  --border: 43 30% 20%       (Gold hint) │
+└─────────────────────────────────────────┘
 ```
 
-A função usará `supabase.storage.from('contracts').createSignedUrl()` para gerar uma URL temporária segura, já que o bucket é privado.
+### Recursos Adicionais
+
+**Gradientes Premium**:
+- Background com gradiente sutil preto/cinza escuro
+- Botoes com gradiente dourado
+- Bordas com brilho dourado sutil
+
+**Efeitos Visuais**:
+- Hover states com brilho dourado
+- Sombras sutis douradas em cards importantes
+- Transicoes suaves
+
+### Proximos Passos
+
+1. Definir nome final da marca (sugestoes: "Regozoni Docs", "Smart Legal", "SR Sign")
+2. Implementar nova paleta de cores no CSS
+3. Atualizar todas as paginas com a nova identidade
+4. Adicionar logo/icone personalizado (se fornecido)
+
+### Pergunta para o Usuario
+
+Qual nome voce prefere para a ferramenta?
+- **Regozoni Docs** - direto ao ponto, sua marca
+- **Smart Legal Sign** - baseado no "Smart" que aparece no seu conteudo
+- **SR Sign** - minimalista com suas iniciais
+- **Outro nome** - me diga qual prefere
 
