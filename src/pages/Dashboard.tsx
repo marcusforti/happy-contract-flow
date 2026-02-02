@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,6 +25,7 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react';
+import type { RealtimePostgresUpdatePayload } from '@supabase/supabase-js';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,6 +108,60 @@ export default function Dashboard() {
     if (user) {
       fetchContracts();
     }
+  }, [user]);
+
+  // Realtime subscription for contracts and signatories
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'contracts',
+        },
+        (payload: RealtimePostgresUpdatePayload<Contract>) => {
+          const newContract = payload.new;
+          
+          setContracts(prev => 
+            prev.map(c => c.id === newContract.id 
+              ? { ...c, ...newContract } 
+              : c
+            )
+          );
+          
+          // Toast de celebração quando contrato é concluído
+          if (newContract.status === 'completed') {
+            toast.success(`🎉 Contrato "${newContract.title}" foi concluído!`, {
+              duration: 5000,
+            });
+          } else if (newContract.status === 'partially_signed') {
+            toast.info(`✍️ Nova assinatura em "${newContract.title}"`, {
+              duration: 3000,
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contract_signatories',
+        },
+        () => {
+          // Refetch para atualizar a barra de progresso
+          fetchContracts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   useEffect(() => {
