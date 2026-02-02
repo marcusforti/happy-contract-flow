@@ -416,12 +416,12 @@ export default function SigningPage() {
         console.error('Error notifying owner:', emailErr);
       }
 
-      if (allSigned) {
-        await supabase
-          .from('contracts')
-          .update({ status: 'completed' })
-          .eq('id', contract.id);
+      // Use database function to update status (bypasses RLS for signatories)
+      const { data: isCompleted } = await supabase.rpc('complete_contract_if_all_signed', {
+        p_contract_id: contract.id
+      });
 
+      if (isCompleted) {
         await supabase.from('audit_logs').insert({
           contract_id: contract.id,
           action: 'completed',
