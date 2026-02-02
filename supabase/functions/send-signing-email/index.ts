@@ -43,7 +43,10 @@ const handler = async (req: Request): Promise<Response> => {
     const emailBodyContent = customBody 
       ? `<p style="margin: 0 0 24px 0; font-size: 16px; color: #e0e0e0; line-height: 1.8; white-space: pre-line;">${customBody}</p>`
       : `<p style="margin: 0 0 24px 0; font-size: 16px; color: #a0a0a0; line-height: 1.6;">
-          ${senderName || 'Alguém'} enviou um documento para você assinar através da plataforma Regozoni Docs.
+          A Regozoni Docs, plataforma oficial de assessoria jurídica do Dr. Sidney Regozoni, atua neste ato em nome de ${senderName || 'nosso cliente'} para formalizar o documento "${contractTitle}".
+        </p>
+        <p style="margin: 0 0 24px 0; font-size: 16px; color: #a0a0a0; line-height: 1.6;">
+          Solicitamos a gentileza de revisar o documento e proceder com a assinatura eletrônica através do botão abaixo.
         </p>`;
 
     // Build attachments array
@@ -117,7 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
                           <td align="center">
                             <a href="${signingLink}" 
                                style="display: inline-block; background: linear-gradient(135deg, #D4AF37, #B8860B); color: #0a0a0a; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                              Assinar Documento
+                              Revisar e Assinar
                             </a>
                           </td>
                         </tr>
