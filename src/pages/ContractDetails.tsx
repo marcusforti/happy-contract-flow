@@ -169,6 +169,32 @@ export default function ContractDetails() {
 
       const senderName = profile?.full_name || user.email || 'Regozoni Docs';
 
+      // Fetch PDF once and extract text for IA email generation
+      let pdfText: string | null = null;
+      if (contract.file_path) {
+        try {
+          toast.info('Analisando contrato com IA...');
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from('contracts')
+            .createSignedUrl(contract.file_path, 60);
+
+          if (!signedUrlError && signedUrlData?.signedUrl) {
+            const response = await fetch(signedUrlData.signedUrl);
+            if (response.ok) {
+              const pdfBlob = await response.blob();
+              const pdfFile = new File([pdfBlob], 'contract.pdf', { type: 'application/pdf' });
+              const extracted = await extractTextFromPDF(pdfFile);
+              if (extracted && extracted.length >= 50) {
+                pdfText = extracted;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Could not extract PDF text for IA email generation:', err);
+          // Fallback to default email body if IA fails
+        }
+      }
+
       // Send emails to all pending signatories
       const pendingSignatories = signatories.filter(s => !s.signed_at);
       let emailsSent = 0;
@@ -176,6 +202,30 @@ export default function ContractDetails() {
 
       for (const signatory of pendingSignatories) {
         const signingLink = `${window.location.origin}/sign/${signatory.access_token}`;
+
+        // Try to generate an AI body (optional)
+        let customBody: string | undefined;
+        if (pdfText) {
+          try {
+            const { data: aiData, error: aiError } = await supabase.functions.invoke('generate-email-body', {
+              body: {
+                pdfText,
+                contractTitle: contract.title,
+                senderName,
+                signatoryName: signatory.name,
+                expiresAt: contract.expires_at
+                  ? format(new Date(contract.expires_at), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
+                  : undefined,
+              },
+            });
+
+            if (!aiError && aiData?.success && aiData?.body) {
+              customBody = aiData.body;
+            }
+          } catch (err) {
+            console.warn('AI email generation failed, falling back to default:', err);
+          }
+        }
         
         const { data, error: emailError } = await supabase.functions.invoke('send-signing-email', {
           body: {
@@ -184,6 +234,7 @@ export default function ContractDetails() {
             contractTitle: contract.title,
             signingLink,
             senderName,
+            customBody,
           },
         });
 

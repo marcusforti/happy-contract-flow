@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.send-completion-email]
 verify_jwt = false
+
+[functions.send-owner-completion-email]
+verify_jwt = false
