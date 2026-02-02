@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import heroVideo from '@/assets/hero-video.mp4';
 
 export default function Index() {
   const { user, loading } = useAuth();
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   if (loading) {
     return (
@@ -55,17 +57,31 @@ export default function Index() {
 
       {/* Hero with Video Background */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Video Background */}
+        {/* Video Background with Loading State */}
         <div className="absolute inset-0 z-0">
+          {/* Premium gradient fallback - always visible */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[hsl(0,0%,8%)] via-[hsl(43,20%,6%)] to-[hsl(0,0%,4%)]" />
+          
+          {/* Loading skeleton animation - visible while video loads */}
+          {!videoLoaded && (
+            <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-primary/5 to-muted/10 animate-pulse" />
+          )}
+          
+          {/* Video with smooth fade-in transition */}
           <video
             autoPlay
             muted
             loop
             playsInline
-            className="w-full h-full object-cover"
+            preload="auto"
+            onCanPlay={() => setVideoLoaded(true)}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+              videoLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
           >
             <source src={heroVideo} type="video/mp4" />
           </video>
+          
           {/* Dark overlay with gradient */}
           <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/50 to-background" />
           <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/60" />
