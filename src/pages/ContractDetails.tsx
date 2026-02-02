@@ -169,11 +169,14 @@ export default function ContractDetails() {
 
       const senderName = profile?.full_name || user.email || 'Regozoni Docs';
 
-      // Fetch PDF once and extract text for IA email generation
+      // Fetch PDF once for both IA email generation and attachment
       let pdfText: string | null = null;
+      let pdfBase64: string | null = null;
+      let pdfFileName: string | null = null;
+
       if (contract.file_path) {
         try {
-          toast.info('Analisando contrato com IA...');
+          toast.info('Preparando contrato...');
           const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from('contracts')
             .createSignedUrl(contract.file_path, 60);
@@ -182,16 +185,29 @@ export default function ContractDetails() {
             const response = await fetch(signedUrlData.signedUrl);
             if (response.ok) {
               const pdfBlob = await response.blob();
+              
+              // Convert to base64 for email attachment
+              const arrayBuffer = await pdfBlob.arrayBuffer();
+              const bytes = new Uint8Array(arrayBuffer);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              pdfBase64 = btoa(binary);
+              pdfFileName = contract.file_path.split('/').pop() || `${contract.title}.pdf`;
+
+              // Extract text for AI email generation
               const pdfFile = new File([pdfBlob], 'contract.pdf', { type: 'application/pdf' });
               const extracted = await extractTextFromPDF(pdfFile);
               if (extracted && extracted.length >= 50) {
                 pdfText = extracted;
+                toast.info('Gerando email personalizado com IA...');
               }
             }
           }
         } catch (err) {
-          console.warn('Could not extract PDF text for IA email generation:', err);
-          // Fallback to default email body if IA fails
+          console.warn('Could not process PDF for email:', err);
+          // Continue without PDF attachment/AI if fails
         }
       }
 
@@ -235,6 +251,8 @@ export default function ContractDetails() {
             signingLink,
             senderName,
             customBody,
+            pdfBase64: pdfBase64 || undefined,
+            pdfFileName: pdfFileName || undefined,
           },
         });
 
@@ -261,7 +279,7 @@ export default function ContractDetails() {
       } else if (emailsFailed > 0) {
         toast.error('Contrato enviado, mas falha ao enviar emails. Os signatários podem usar os links copiados manualmente.');
       } else {
-        toast.success(`Contrato enviado! ${emailsSent} email(s) enviado(s) para os signatários.`);
+        toast.success(`Contrato enviado! ${emailsSent} email(s) com contrato anexado enviado(s) para os signatários.`);
       }
 
       fetchContractData();

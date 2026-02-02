@@ -16,6 +16,8 @@ interface SigningEmailRequest {
   signingLink: string;
   senderName: string;
   customBody?: string; // AI-generated body content
+  pdfBase64?: string; // Base64 encoded PDF
+  pdfFileName?: string; // Original filename
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -25,7 +27,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { to, signatoryName, contractTitle, signingLink, senderName, customBody }: SigningEmailRequest = await req.json();
+    const { to, signatoryName, contractTitle, signingLink, senderName, customBody, pdfBase64, pdfFileName }: SigningEmailRequest = await req.json();
 
     // Validate required fields
     if (!to || !signatoryName || !contractTitle || !signingLink) {
@@ -33,6 +35,9 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log(`Sending signing email to ${to} for contract: ${contractTitle}`);
+    if (pdfBase64) {
+      console.log(`Including PDF attachment: ${pdfFileName || 'contrato.pdf'}`);
+    }
 
     // Use custom AI-generated body or fallback to default
     const emailBodyContent = customBody 
@@ -40,6 +45,21 @@ const handler = async (req: Request): Promise<Response> => {
       : `<p style="margin: 0 0 24px 0; font-size: 16px; color: #a0a0a0; line-height: 1.6;">
           ${senderName || 'Alguém'} enviou um documento para você assinar através da plataforma Regozoni Docs.
         </p>`;
+
+    // Build attachments array
+    const attachments = pdfBase64 ? [
+      {
+        filename: pdfFileName || 'contrato.pdf',
+        content: pdfBase64,
+      }
+    ] : undefined;
+
+    // Info about attachment in email body
+    const attachmentInfo = pdfBase64 
+      ? `<p style="margin: 0 0 16px 0; font-size: 13px; color: #888;">
+          📎 O documento está anexado a este email para sua leitura prévia.
+        </p>` 
+      : '';
 
     const emailResponse = await resend.emails.send({
       from: "Regozoni Docs <noreply@equipe.aceleracaoforti.online>",
@@ -85,6 +105,8 @@ const handler = async (req: Request): Promise<Response> => {
                         </p>
                       </div>
                       
+                      ${attachmentInfo}
+                      
                       <p style="margin: 0 0 32px 0; font-size: 14px; color: #a0a0a0; line-height: 1.6;">
                         Clique no botão abaixo para visualizar o documento e realizar sua assinatura digital.
                       </p>
@@ -127,6 +149,7 @@ const handler = async (req: Request): Promise<Response> => {
         </body>
         </html>
       `,
+      attachments,
     });
 
     console.log("Email sent successfully:", emailResponse);

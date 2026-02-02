@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -16,6 +17,17 @@ interface SignatureConfirmationRequest {
   signedAt: string;
   remainingSignatories: number;
   isLastSignature: boolean;
+  filePath?: string; // Optional: path to contract PDF in storage
+}
+
+// Helper function to convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -30,7 +42,8 @@ const handler = async (req: Request): Promise<Response> => {
       contractTitle, 
       signedAt,
       remainingSignatories,
-      isLastSignature
+      isLastSignature,
+      filePath
     }: SignatureConfirmationRequest = await req.json();
 
     if (!signatoryEmail || !signatoryName || !contractTitle || !signedAt) {
@@ -39,9 +52,57 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Sending signature confirmation to ${signatoryEmail} for contract: ${contractTitle}`);
 
+    // Try to fetch PDF from storage if filePath is provided
+    let pdfBase64: string | undefined;
+    let pdfFileName: string | undefined;
+
+    if (filePath) {
+      try {
+        console.log(`Fetching contract PDF from storage: ${filePath}`);
+        
+        const supabaseAdmin = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+
+        const { data: fileData, error: fileError } = await supabaseAdmin.storage
+          .from('contracts')
+          .download(filePath);
+
+        if (fileError) {
+          console.warn('Could not download contract PDF:', fileError);
+        } else if (fileData) {
+          const arrayBuffer = await fileData.arrayBuffer();
+          pdfBase64 = arrayBufferToBase64(arrayBuffer);
+          pdfFileName = filePath.split('/').pop() || 'contrato.pdf';
+          console.log(`PDF fetched successfully: ${pdfFileName}`);
+        }
+      } catch (err) {
+        console.warn('Error fetching PDF for attachment:', err);
+        // Continue without attachment
+      }
+    }
+
     const statusMessage = isLastSignature 
       ? `<span style="color: #10b981; font-weight: 600;">Você foi o último a assinar!</span> O contrato está agora oficialmente concluído. Você receberá em breve o certificado de conclusão.`
       : `Aguardando <span style="color: #D4AF37; font-weight: 600;">${remainingSignatories}</span> assinatura(s) restante(s) para conclusão do contrato.`;
+
+    // Build attachments array
+    const attachments = pdfBase64 ? [
+      {
+        filename: pdfFileName || 'contrato.pdf',
+        content: pdfBase64,
+      }
+    ] : undefined;
+
+    // Info about attachment in email body
+    const attachmentInfo = pdfBase64 
+      ? `<div style="background: #1a1a1a; border-radius: 8px; padding: 16px; margin-bottom: 24px; border: 1px solid rgba(16, 185, 129, 0.2);">
+          <p style="margin: 0; font-size: 13px; color: #10b981;">
+            📎 O contrato assinado está anexado a este email para sua referência.
+          </p>
+        </div>` 
+      : '';
 
     const emailResponse = await resend.emails.send({
       from: "Regozoni Docs <noreply@equipe.aceleracaoforti.online>",
@@ -103,6 +164,8 @@ const handler = async (req: Request): Promise<Response> => {
                         </div>
                       </div>
 
+                      ${attachmentInfo}
+
                       <!-- Status Box -->
                       <div style="background: #1a1a1a; border-radius: 8px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05);">
                         <p style="margin: 0 0 8px 0; font-size: 11px; color: #888; text-transform: uppercase;">Status do Contrato</p>
@@ -138,6 +201,7 @@ const handler = async (req: Request): Promise<Response> => {
         </body>
         </html>
       `,
+      attachments,
     });
 
     console.log("Signature confirmation email sent successfully:", emailResponse);
