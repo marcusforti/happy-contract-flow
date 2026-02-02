@@ -80,6 +80,7 @@ export default function ContractDetails() {
   const [signatories, setSignatories] = useState<Signatory[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -157,6 +158,55 @@ export default function ContractDetails() {
 
     toast.success('Contrato enviado para assinatura! Os signatários podem usar seus links para assinar.');
     fetchContractData();
+  };
+
+  const downloadDocument = async () => {
+    if (!contract?.file_path || !user) return;
+
+    setDownloading(true);
+    try {
+      // Generate signed URL (valid for 60 seconds)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('contracts')
+        .createSignedUrl(contract.file_path, 60);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        throw new Error('Não foi possível gerar URL para download');
+      }
+
+      // Fetch the file
+      const response = await fetch(signedUrlData.signedUrl);
+      if (!response.ok) throw new Error('Erro ao baixar arquivo');
+
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = contract.file_path.split('/').pop() || `${contract.title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      // Register audit log
+      await supabase.from('audit_logs').insert({
+        contract_id: contract.id,
+        user_id: user.id,
+        action: 'downloaded',
+        ip_address: 'N/A',
+        user_agent: navigator.userAgent,
+      });
+
+      toast.success('Download iniciado!');
+      fetchContractData();
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Erro ao baixar documento');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (loading) {
@@ -349,9 +399,18 @@ export default function ContractDetails() {
                   </Button>
                 )}
                 {contract.file_path && (
-                  <Button variant="outline" className="w-full">
-                    <Download className="h-4 w-4 mr-2" />
-                    Baixar documento
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={downloadDocument}
+                    disabled={downloading}
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    {downloading ? 'Baixando...' : 'Baixar documento'}
                   </Button>
                 )}
                 {contract.status === 'completed' && (
