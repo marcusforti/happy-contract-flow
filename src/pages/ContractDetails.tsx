@@ -46,6 +46,7 @@ interface Signatory {
   signing_order: number;
   access_token: string;
   signed_at: string | null;
+  otp_verified_at: string | null;
 }
 
 interface AuditLog {
@@ -54,7 +55,8 @@ interface AuditLog {
   ip_address: string | null;
   user_agent: string | null;
   created_at: string;
-  metadata: unknown;
+  metadata: any;
+  signatory_id: string | null;
 }
 
 const statusConfig = {
@@ -74,6 +76,10 @@ const actionLabels: Record<string, string> = {
   sent: 'Enviado para assinatura',
   certificate_downloaded: 'Certificado baixado',
   email_resent: 'Email reenviado',
+  otp_sent: 'Código de verificação enviado',
+  otp_verified: 'Email verificado',
+  otp_failed: 'Tentativa de verificação falhou',
+  terms_accepted: 'Termos aceitos',
 };
 
 export default function ContractDetails() {
@@ -360,6 +366,7 @@ export default function ContractDetails() {
             name,
             email,
             signed_at,
+            otp_verified_at,
             contract_id
           )
         `)
@@ -369,9 +376,38 @@ export default function ContractDetails() {
         console.error('Error fetching signatures:', signaturesError);
       }
 
-      // Map signatures to signatories
+      // Get terms_accepted and otp events from audit logs for each signatory
+      const getSignatoryEvents = (signatoryId: string) => {
+        const termsAccepted = auditLogs.find(
+          log => log.action === 'terms_accepted' && log.signatory_id === signatoryId
+        );
+        const otpVerified = auditLogs.find(
+          log => log.action === 'otp_verified' && log.signatory_id === signatoryId
+        );
+        const viewedLog = auditLogs.find(
+          log => log.action === 'viewed' && log.signatory_id === signatoryId
+        );
+        return { termsAccepted, otpVerified, viewedLog };
+      };
+
+      // Parse geolocation from metadata
+      const parseGeolocation = (metadata: any): string => {
+        if (!metadata) return 'N/A';
+        const geo = metadata.geolocation;
+        if (!geo) return 'N/A';
+        const parts = [];
+        if (geo.city) parts.push(geo.city);
+        if (geo.region) parts.push(geo.region);
+        if (geo.country) parts.push(geo.country);
+        return parts.length > 0 ? parts.join(', ') : 'N/A';
+      };
+
+      // Map signatures to signatories with enhanced details
       const signatoryDetails = signatories.map(signatory => {
         const signature = signaturesData?.find(s => s.signatory_id === signatory.id);
+        const events = getSignatoryEvents(signatory.id);
+        const signatoryData = signature?.contract_signatories as any;
+        
         return {
           name: signatory.name,
           email: signatory.email,
@@ -379,6 +415,11 @@ export default function ContractDetails() {
           ip_address: signature?.ip_address || 'N/A',
           user_agent: signature?.user_agent || 'N/A',
           signature_type: signature?.signature_type || 'N/A',
+          otp_verified_at: signatoryData?.otp_verified_at || signatory.otp_verified_at || null,
+          terms_accepted_at: events.termsAccepted?.created_at || null,
+          terms_accepted_ip: events.termsAccepted?.ip_address || null,
+          geolocation: parseGeolocation(events.termsAccepted?.metadata) || parseGeolocation(events.otpVerified?.metadata) || 'N/A',
+          first_viewed_at: events.viewedLog?.created_at || null,
         };
       });
 
@@ -611,36 +652,75 @@ export default function ContractDetails() {
       <div class="section-title">✍️ Signatários (${signatoryDetails.length})</div>
       ${signatoryDetails.map((sig, idx) => `
       <div class="signatory-card">
-        <div class="signatory-name">${idx + 1}. ${sig.name}</div>
-        <div class="signatory-details">
+        <div class="signatory-name">
+          ${idx + 1}. ${sig.name}
+          ${sig.otp_verified_at ? '<span class="badge" style="background: #166534;">✓ Email Verificado</span>' : ''}
+          ${sig.terms_accepted_at ? '<span class="badge" style="background: #1e40af;">✓ Termos Aceitos</span>' : ''}
+        </div>
+        <div class="signatory-details" style="grid-template-columns: 1fr 1fr 1fr;">
           <div><span>E-mail:</span> <strong>${sig.email}</strong></div>
           <div><span>Assinado em:</span> <strong>${sig.signed_at ? formatDateTime(sig.signed_at) : 'Pendente'}</strong></div>
-          <div><span>Endereço IP:</span> <strong>${sig.ip_address}</strong></div>
-          <div><span>Navegador:</span> <strong>${parseUserAgent(sig.user_agent)}</strong></div>
           <div><span>Tipo de Assinatura:</span> <strong>${sig.signature_type === 'draw' ? 'Desenhada' : sig.signature_type === 'type' ? 'Digitada' : sig.signature_type}</strong></div>
+        </div>
+        
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="font-size: 11px; color: #ca8a04; margin-bottom: 8px; font-weight: 600;">📍 Evidências de Autenticação</div>
+          <div class="signatory-details" style="grid-template-columns: 1fr 1fr;">
+            <div><span>Endereço IP:</span> <strong>${sig.ip_address}</strong></div>
+            <div><span>Localização:</span> <strong>${sig.geolocation}</strong></div>
+            <div><span>Navegador:</span> <strong>${parseUserAgent(sig.user_agent)}</strong></div>
+            <div><span>User Agent:</span> <strong style="font-size: 10px; word-break: break-all;">${sig.user_agent !== 'N/A' ? sig.user_agent.substring(0, 80) + '...' : 'N/A'}</strong></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <div style="font-size: 11px; color: #ca8a04; margin-bottom: 8px; font-weight: 600;">🔐 Verificação de Identidade</div>
+          <div class="signatory-details" style="grid-template-columns: 1fr 1fr;">
+            <div><span>Email Verificado (OTP):</span> <strong>${sig.otp_verified_at ? formatDateTime(sig.otp_verified_at) : 'Não verificado'}</strong></div>
+            <div><span>Termos Aceitos em:</span> <strong>${sig.terms_accepted_at ? formatDateTime(sig.terms_accepted_at) : 'N/A'}</strong></div>
+            <div><span>Primeiro Acesso:</span> <strong>${sig.first_viewed_at ? formatDateTime(sig.first_viewed_at) : 'N/A'}</strong></div>
+            <div><span>IP do Aceite:</span> <strong>${sig.terms_accepted_ip || 'N/A'}</strong></div>
+          </div>
         </div>
       </div>
       `).join('')}
     </div>
 
     <div class="section">
-      <div class="section-title">📋 Trilha de Auditoria</div>
-      ${auditLogs.slice(0, 20).map(log => `
+      <div class="section-title">📋 Trilha de Auditoria Completa</div>
+      ${auditLogs.slice(0, 30).map(log => `
       <div class="audit-item">
         <div class="audit-date">${formatDateTime(log.created_at)}</div>
-        <div class="audit-action">${actionLabels[log.action] || log.action}${log.ip_address && log.ip_address !== 'N/A' ? ` (IP: ${log.ip_address})` : ''}</div>
+        <div class="audit-action">
+          ${actionLabels[log.action] || log.action}
+          ${log.ip_address && log.ip_address !== 'N/A' ? `<span style="color: #999; font-size: 11px;"> (IP: ${log.ip_address})</span>` : ''}
+          ${log.metadata?.geolocation?.city ? `<span style="color: #999; font-size: 11px;"> - ${log.metadata.geolocation.city}, ${log.metadata.geolocation.country || ''}</span>` : ''}
+        </div>
       </div>
       `).join('')}
     </div>
 
     <div class="section">
       <div class="legal-notice">
-        <strong>⚖️ Validade Jurídica</strong>
+        <strong>⚖️ Validade Jurídica - Assinatura Eletrônica Avançada</strong>
         Este documento foi assinado eletronicamente através da plataforma Regozoni Docs, em conformidade com a 
-        <strong style="display: inline;">Lei nº 14.063/2020</strong> que dispõe sobre o uso de assinaturas eletrônicas 
-        em interações com entes públicos, em atos de pessoas jurídicas e em questões de saúde. A assinatura eletrônica 
-        simples utilizada neste documento possui validade jurídica quando associada à trilha de auditoria completa, 
-        identificação dos signatários e hash do documento para verificação de integridade.
+        <strong style="display: inline;">Lei nº 14.063/2020</strong> e a <strong style="display: inline;">MP 2.200-2/2001</strong>, 
+        que dispõem sobre o uso de assinaturas eletrônicas no Brasil.
+        <br><br>
+        <strong style="color: #ca8a04;">Evidências técnicas capturadas:</strong>
+        <ul style="margin-top: 8px; padding-left: 20px;">
+          <li>Verificação de email via código OTP (One-Time Password)</li>
+          <li>Aceite explícito dos termos antes da assinatura</li>
+          <li>Endereço IP real do signatário</li>
+          <li>Geolocalização aproximada via headers de requisição</li>
+          <li>User Agent completo (navegador e sistema operacional)</li>
+          <li>Hash SHA-256 do documento original</li>
+          <li>Trilha de auditoria com timestamps de cada ação</li>
+        </ul>
+        <br>
+        A combinação dessas evidências caracteriza uma <strong style="display: inline;">Assinatura Eletrônica Avançada</strong>, 
+        que possui validade jurídica robusta por associar inequivocamente o signatário ao documento, garantir a 
+        integridade do conteúdo e registrar o consentimento informado.
       </div>
     </div>
 
