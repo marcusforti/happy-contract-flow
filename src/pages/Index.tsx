@@ -95,13 +95,13 @@ export default function Index() {
             <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-primary/5 to-muted/10 animate-pulse" />
           )}
           
-          {/* Mobile: Static image background */}
+          {/* Mobile: Static image background - positioned lower to show pen */}
           {isMobile && (
             <img
               src={heroMobileBg}
               alt=""
               onLoad={() => setImageLoaded(true)}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+              className={`absolute inset-0 w-full h-full object-cover object-[center_65%] transition-opacity duration-1000 ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
             />
