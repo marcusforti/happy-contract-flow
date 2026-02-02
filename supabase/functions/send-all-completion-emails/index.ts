@@ -17,6 +17,16 @@ interface SendAllCompletionRequest {
   origin: string;
 }
 
+// Helper function to convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 // Generate PDF certificate
 function generateCertificatePdf(
   contract: { title: string; description: string | null; document_hash: string | null; created_at: string },
@@ -360,10 +370,10 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Token de acesso inválido");
     }
 
-    // Get contract with full details
+    // Get contract with full details including file_path
     const { data: contract, error: contractError } = await supabaseAdmin
       .from("contracts")
-      .select("id, title, description, document_hash, status, created_at")
+      .select("id, title, description, document_hash, status, created_at, file_path")
       .eq("id", contractId)
       .single();
 
@@ -417,6 +427,31 @@ const handler = async (req: Request): Promise<Response> => {
       auditLogs || []
     );
     console.log("PDF certificate generated successfully");
+
+    // Try to fetch original contract PDF for attachment
+    let contractPdfBase64: string | undefined;
+    let contractPdfFileName: string | undefined;
+
+    if (contract.file_path) {
+      try {
+        console.log(`Fetching original contract PDF from storage: ${contract.file_path}`);
+        const { data: fileData, error: fileError } = await supabaseAdmin.storage
+          .from('contracts')
+          .download(contract.file_path);
+
+        if (fileError) {
+          console.warn('Could not download contract PDF:', fileError);
+        } else if (fileData) {
+          const arrayBuffer = await fileData.arrayBuffer();
+          contractPdfBase64 = arrayBufferToBase64(arrayBuffer);
+          contractPdfFileName = contract.file_path.split('/').pop() || `${contract.title}.pdf`;
+          console.log(`Original contract PDF fetched successfully: ${contractPdfFileName}`);
+        }
+      } catch (err) {
+        console.warn('Error fetching original contract PDF:', err);
+        // Continue without the original contract attachment
+      }
+    }
 
     const completedAt = new Date().toLocaleString('pt-BR', { 
       dateStyle: 'long', 
@@ -528,7 +563,7 @@ const handler = async (req: Request): Promise<Response> => {
                         <!-- Certificate Download CTA -->
                         <div style="text-align: center; margin: 32px 0;">
                           <p style="margin: 0 0 16px 0; font-size: 14px; color: #a0a0a0;">
-                            📎 O certificado PDF está anexado a este email
+                            📎 ${contractPdfBase64 ? 'O certificado e o contrato original estão anexados a este email' : 'O certificado PDF está anexado a este email'}
                           </p>
                         </div>
 
@@ -571,7 +606,12 @@ const handler = async (req: Request): Promise<Response> => {
           {
             filename: `certificado-${contract.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.pdf`,
             content: certificateBase64,
-          }
+          },
+          // Add original contract PDF if available
+          ...(contractPdfBase64 ? [{
+            filename: contractPdfFileName || `contrato-${contract.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.pdf`,
+            content: contractPdfBase64,
+          }] : []),
         ],
       });
     });

@@ -18,6 +18,7 @@ interface Contract {
   status: string;
   owner_id: string;
   document_hash: string | null;
+  file_path: string | null;
 }
 
 interface Signatory {
@@ -72,7 +73,7 @@ export default function SigningPage() {
     // Fetch contract
     const { data: contractData, error: contractError } = await supabase
       .from('contracts')
-      .select('id, title, description, status, owner_id, document_hash')
+      .select('id, title, description, status, owner_id, document_hash, file_path')
       .eq('id', signatoryData.contract_id)
       .single();
 
@@ -199,7 +200,7 @@ export default function SigningPage() {
       const allSigned = allSignatories?.every(s => s.signed_at);
       const remainingCount = allSignatories?.filter(s => !s.signed_at).length || 0;
 
-      // 1. Send signature confirmation to the signatory
+      // 1. Send signature confirmation to the signatory (with contract PDF attached if available)
       try {
         const signedAtFormatted = new Date().toLocaleString('pt-BR', { 
           dateStyle: 'short', 
@@ -214,6 +215,7 @@ export default function SigningPage() {
             signedAt: signedAtFormatted,
             remainingSignatories: remainingCount,
             isLastSignature: allSigned,
+            filePath: contract.file_path, // Pass file path for attachment
           },
         });
       } catch (emailErr) {
