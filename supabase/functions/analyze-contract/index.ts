@@ -25,27 +25,44 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `Você é um assistente especializado em análise de contratos jurídicos brasileiros.
-Analise o texto do contrato fornecido e extraia as seguintes informações em formato JSON:
+const systemPrompt = `Você é um especialista jurídico altamente qualificado em análise de contratos brasileiros. Sua tarefa é analisar minuciosamente o texto do contrato e extrair TODAS as informações relevantes.
 
+INSTRUÇÕES DETALHADAS:
+
+1. TÍTULO DO CONTRATO:
+   - Identifique o tipo exato do contrato (Prestação de Serviços, Locação, Compra e Venda, Trabalho, Sociedade, etc.)
+   - Se houver um título explícito no documento, use-o
+   - Caso contrário, crie um título apropriado baseado no conteúdo
+
+2. DESCRIÇÃO:
+   - Resuma o objeto principal do contrato
+   - Mencione as partes envolvidas e suas funções
+   - Inclua valores, prazos ou condições principais se identificados
+   - Seja conciso mas informativo (3-4 frases)
+
+3. SIGNATÁRIOS/PARTES:
+   - Identifique TODAS as partes mencionadas no contrato
+   - Procure por: CONTRATANTE, CONTRATADO, LOCADOR, LOCATÁRIO, VENDEDOR, COMPRADOR, CEDENTE, CESSIONÁRIO, OUTORGANTE, OUTORGADO, etc.
+   - Extraia o nome completo de cada parte (pessoa física ou jurídica)
+   - Se for pessoa jurídica, inclua também o representante legal se mencionado
+   - Procure por testemunhas que também precisam assinar
+
+4. FORMATO DE RESPOSTA (JSON estrito):
 {
-  "title": "Título do contrato (ex: Contrato de Prestação de Serviços, Contrato de Locação, etc.)",
-  "description": "Uma descrição resumida do contrato em 2-3 frases, incluindo o objeto principal e as partes envolvidas",
+  "title": "Título completo e descritivo do contrato",
+  "description": "Descrição detalhada do objeto, partes, valores e condições principais",
   "signatories": [
-    {
-      "name": "Nome completo da parte/signatário identificado no contrato",
-      "email": ""
-    }
+    { "name": "Nome completo do primeiro signatário", "email": "" },
+    { "name": "Nome completo do segundo signatário", "email": "" }
   ]
 }
 
-Regras:
-- Identifique o tipo de contrato pelo conteúdo
-- Extraia os nomes das partes mencionadas (CONTRATANTE, CONTRATADO, LOCADOR, LOCATÁRIO, etc.)
-- O campo email deve ficar vazio pois não costuma aparecer no texto do contrato
-- Se não conseguir identificar claramente alguma informação, use um valor genérico apropriado
-- A descrição deve ser profissional e concisa
-- Retorne APENAS o JSON, sem markdown ou explicações`;
+REGRAS IMPORTANTES:
+- Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais
+- Não invente informações - extraia apenas o que está no documento
+- Se um nome não estiver claro, use a designação da parte (ex: "CONTRATANTE" ou "LOCADOR")
+- Inclua todas as partes que precisam assinar o documento
+- Emails ficam vazios pois geralmente não constam no corpo do contrato`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -54,7 +71,7 @@ Regras:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analise este contrato e extraia as informações:\n\n${pdfText.substring(0, 15000)}` }
