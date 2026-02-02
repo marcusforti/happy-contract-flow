@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FileSignature, Shield, Clock, ArrowRight, Loader2, Quote } from 'lucide-react';
 import logoTransparent from '@/assets/logo-transparent.png';
 import sidneyPhoto from '@/assets/sidney-regozoni.png';
 import heroVideo from '@/assets/hero-video.mp4';
+import heroVideoMobile from '@/assets/hero-video-mobile.mp4';
 
 export default function Index() {
   const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
   const [videoLoaded, setVideoLoaded] = useState(false);
+  
+  // Select video source based on device
+  const videoSource = isMobile ? heroVideoMobile : heroVideo;
 
   if (loading) {
     return (
@@ -67,8 +73,9 @@ export default function Index() {
             <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-primary/5 to-muted/10 animate-pulse" />
           )}
           
-          {/* Video with smooth fade-in transition */}
+          {/* Video with smooth fade-in transition - mobile gets compressed version */}
           <video
+            key={isMobile ? 'mobile' : 'desktop'}
             autoPlay
             muted
             loop
@@ -79,7 +86,7 @@ export default function Index() {
               videoLoaded ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <source src={heroVideo} type="video/mp4" />
+            <source src={videoSource} type="video/mp4" />
           </video>
           
           {/* Dark overlay with gradient */}
