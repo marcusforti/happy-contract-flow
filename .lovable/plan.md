@@ -1,126 +1,97 @@
 
+# Plano: Atualização em Tempo Real do Painel
 
-# Plano de Otimização UX do Painel
+## Problema Identificado
 
-## Visão Geral
-
-Vou otimizar a experiência do usuário no painel com melhorias focadas em **clareza visual**, **feedback instantâneo**, **navegação intuitiva** e **microinterações** que transmitem a sensação premium da marca.
-
----
-
-## Melhorias Propostas
-
-### 1. Quick Actions com Atalhos Visuais
-Adicionar um painel de ações rápidas no topo com cards clicáveis para as ações mais comuns:
-- "Novo Contrato" (ícone + texto)
-- "Contratos Pendentes" (filtro direto)
-- "Concluídos Recentes" (filtro direto)
-
-Benefício: Reduz cliques e torna as ações principais imediatamente acessíveis.
+Quando um signatário assina um contrato (e especialmente quando todos assinam), o Dashboard do proprietário não é atualizado automaticamente. O usuário precisa recarregar a página manualmente para ver as mudanças.
 
 ---
 
-### 2. Skeleton Loading States
-Substituir o spinner de loading por skeleton screens nos cards de estatísticas e lista de contratos.
+## Solução Proposta
 
-Benefício: Feedback visual mais elegante e reduz a percepção de tempo de espera.
-
----
-
-### 3. Contratos com Progresso Visual
-Adicionar uma barra de progresso nos cards de contratos mostrando quantos signatários já assinaram:
-- Ex: "2 de 3 assinaturas" com progress bar visual
-- Indicador de quem falta assinar (hover tooltip)
-
-Benefício: Informação crucial visível sem precisar entrar nos detalhes.
+Implementar **Supabase Realtime** para que o Dashboard receba atualizações instantâneas quando:
+- Um signatário assina (status muda para `partially_signed`)
+- Todos assinam (status muda para `completed`)
+- Qualquer alteração nos contratos ou signatários
 
 ---
 
-### 4. Ordenação Inteligente e Persistente
-- Adicionar opção de ordenar por: Data, Nome, Status, Urgência
-- Persistir preferência no localStorage
-- Indicador visual de ordenação ativa
+## Implementação Técnica
 
-Benefício: Usuário encontra contratos mais rapidamente.
+### 1. Habilitar Realtime na Tabela `contracts`
+
+Criar uma migration SQL para adicionar a tabela ao canal de realtime:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.contracts;
+```
+
+### 2. Adicionar Subscription no Dashboard
+
+Modificar `src/pages/Dashboard.tsx` para:
+- Criar um canal Supabase Realtime ao montar o componente
+- Escutar eventos `UPDATE` na tabela `contracts`
+- Atualizar o estado local quando um contrato for modificado
+- Limpar a subscription ao desmontar
+
+```typescript
+useEffect(() => {
+  if (!user) return;
+
+  const channel = supabase
+    .channel('contracts-realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contracts',
+        filter: `owner_id=eq.${user.id}`,
+      },
+      (payload) => {
+        // Atualiza o contrato modificado no estado
+        setContracts(prev => 
+          prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c)
+        );
+        
+        // Notificação visual
+        if (payload.new.status === 'completed') {
+          toast.success(`🎉 Contrato "${payload.new.title}" foi concluído!`);
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [user]);
+```
+
+### 3. (Opcional) Realtime nos Signatários
+
+Para mostrar progresso em tempo real da barra de assinaturas:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.contract_signatories;
+```
+
+E adicionar subscription para `contract_signatories` com refetch dos dados.
 
 ---
 
-### 5. Notificações Inline
-Mostrar alertas contextuais na lista:
-- Contratos próximos de expirar (badge de "Expira em 2 dias")
-- Contratos parados há muito tempo sem assinatura
+## Arquivos a Modificar
 
-Benefício: Ação proativa ao invés de reativa.
-
----
-
-### 6. Animações de Entrada Melhoradas
-- Stagger animation nos cards (já existe, vou refinar)
-- Transição suave ao filtrar/buscar
-- Feedback visual ao excluir (card sai com animação)
-
-Benefício: Sensação de fluidez e premium.
-
----
-
-### 7. Empty States Contextuais
-Mensagens diferentes para cada cenário:
-- Nenhum contrato criado: CTA para criar primeiro
-- Filtro sem resultados: Sugestão de limpar filtros
-- Todos concluídos: Mensagem de parabéns + CTA novo
-
-Benefício: Guia o usuário na ação correta.
-
----
-
-### 8. Stats Cards Clicáveis
-Tornar os cards de estatísticas clicáveis para filtrar diretamente:
-- Click em "Pendentes" → filtra pendentes
-- Click em "Concluídos" → filtra concluídos
-
-Benefício: Navegação mais intuitiva.
-
----
-
-### 9. Busca com Debounce e Clear
-- Adicionar debounce de 300ms na busca
-- Botão X para limpar busca rapidamente
-- Highlight do termo buscado nos resultados
-
-Benefício: Performance melhor e UX mais fluida.
-
----
-
-### 10. Mobile-First Refinements
-- Melhorar responsividade dos cards
-- Ações em swipe (opcional para próxima fase)
-- Bottom sheet para filtros em mobile
-
----
-
-## Detalhes Técnicos
-
-### Arquivos a Modificar
-- `src/pages/Dashboard.tsx` - Implementação principal
-
-### Novos Componentes
-- `ContractProgressBar` - Barra de progresso de assinaturas
-- `SkeletonCard` - Skeleton loading state
-- `ExpirationBadge` - Badge de expiração
-
-### Dependências
-- Nenhuma nova dependência necessária
-- Usar `date-fns` já instalado para cálculos de datas
-
-### Animações
-- Utilizar keyframes existentes + novas transições com Tailwind
+| Arquivo | Alteração |
+|---------|-----------|
+| Migration SQL | Habilitar realtime nas tabelas |
+| `src/pages/Dashboard.tsx` | Adicionar subscription e toast de notificação |
 
 ---
 
 ## Resultado Esperado
 
-Um painel que:
-- Transmite profissionalismo e sofisticação
-- Reduz o tempo para realizar ações comuns
-- Fornece informações importantes de forma proativa
-- Mantém a identidade visual premium da marca
+- ✅ Dashboard atualiza instantaneamente quando um contrato muda de status
+- ✅ Toast de celebração quando um contrato é concluído
+- ✅ Barra de progresso de assinaturas atualiza em tempo real
+- ✅ Experiência premium sem necessidade de refresh manual
