@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileSignature, Pen, Type, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Scale, Pen, Type, Check, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
 
@@ -235,10 +235,10 @@ export default function SigningPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Card className="max-w-md w-full">
+        <Card className="max-w-md w-full card-premium gold-border">
           <CardContent className="pt-6 text-center">
             {error.includes('sucesso') ? (
-              <Check className="h-12 w-12 mx-auto text-green-600 mb-4" />
+              <Check className="h-12 w-12 mx-auto text-emerald-500 mb-4" />
             ) : (
               <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
             )}
@@ -253,18 +253,20 @@ export default function SigningPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center gap-2 px-4 py-4">
-          <FileSignature className="h-6 w-6 text-primary" />
-          <span className="text-xl font-bold">SignDoc</span>
+      <header className="border-b border-primary/20 bg-card">
+        <div className="container mx-auto flex items-center gap-3 px-4 py-4">
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center gold-border">
+            <Scale className="h-5 w-5 text-primary" />
+          </div>
+          <span className="text-xl font-bold gold-text">Regozoni Docs</span>
         </div>
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-8">
         {/* Contract Info */}
-        <Card className="mb-6">
+        <Card className="mb-6 card-premium">
           <CardHeader>
             <CardTitle>{contract?.title}</CardTitle>
             {contract?.description && (
@@ -272,7 +274,7 @@ export default function SigningPage() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="bg-muted/50 rounded-lg p-4">
+            <div className="bg-muted/50 rounded-lg p-4 gold-border">
               <p className="text-sm text-muted-foreground mb-1">Assinando como:</p>
               <p className="font-medium">{signatory?.name}</p>
               <p className="text-sm text-muted-foreground">{signatory?.email}</p>
@@ -281,7 +283,7 @@ export default function SigningPage() {
         </Card>
 
         {/* Signature */}
-        <Card>
+        <Card className="card-premium gold-border">
           <CardHeader>
             <CardTitle>Sua Assinatura</CardTitle>
             <CardDescription>
@@ -290,7 +292,7 @@ export default function SigningPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={signatureType} onValueChange={(v) => setSignatureType(v as 'draw' | 'type')}>
-              <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted">
                 <TabsTrigger value="draw" className="flex items-center gap-2">
                   <Pen className="h-4 w-4" />
                   Desenhar
@@ -302,7 +304,7 @@ export default function SigningPage() {
               </TabsList>
 
               <TabsContent value="draw">
-                <div className="border rounded-lg bg-white">
+                <div className="border rounded-lg bg-white overflow-hidden">
                   <SignatureCanvas
                     ref={signatureCanvasRef}
                     canvasProps={{
@@ -333,7 +335,7 @@ export default function SigningPage() {
                   {typedSignature && (
                     <div className="border rounded-lg p-6 bg-white text-center">
                       <p 
-                        className="text-3xl text-foreground"
+                        className="text-3xl text-gray-900"
                         style={{ fontFamily: "'Dancing Script', cursive" }}
                       >
                         {typedSignature}
@@ -344,13 +346,13 @@ export default function SigningPage() {
               </TabsContent>
             </Tabs>
 
-            <div className="mt-6 pt-6 border-t">
+            <div className="mt-6 pt-6 border-t border-primary/20">
               <p className="text-xs text-muted-foreground mb-4">
                 Ao clicar em "Assinar documento", você concorda que sua assinatura eletrônica 
                 será legalmente vinculante, com o mesmo valor de uma assinatura manuscrita.
               </p>
               <Button 
-                className="w-full" 
+                className="w-full btn-gold" 
                 size="lg"
                 onClick={handleSubmit}
                 disabled={submitting}
@@ -365,6 +367,11 @@ export default function SigningPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-muted-foreground mt-8">
+          Powered by <span className="gold-text font-medium">Regozoni Docs</span>
+        </p>
       </main>
     </div>
   );
