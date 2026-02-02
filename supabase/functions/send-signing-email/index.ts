@@ -15,6 +15,7 @@ interface SigningEmailRequest {
   contractTitle: string;
   signingLink: string;
   senderName: string;
+  customBody?: string; // AI-generated body content
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -24,7 +25,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { to, signatoryName, contractTitle, signingLink, senderName }: SigningEmailRequest = await req.json();
+    const { to, signatoryName, contractTitle, signingLink, senderName, customBody }: SigningEmailRequest = await req.json();
 
     // Validate required fields
     if (!to || !signatoryName || !contractTitle || !signingLink) {
@@ -32,6 +33,13 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log(`Sending signing email to ${to} for contract: ${contractTitle}`);
+
+    // Use custom AI-generated body or fallback to default
+    const emailBodyContent = customBody 
+      ? `<p style="margin: 0 0 24px 0; font-size: 16px; color: #e0e0e0; line-height: 1.8; white-space: pre-line;">${customBody}</p>`
+      : `<p style="margin: 0 0 24px 0; font-size: 16px; color: #a0a0a0; line-height: 1.6;">
+          ${senderName || 'Alguém'} enviou um documento para você assinar através da plataforma Regozoni Docs.
+        </p>`;
 
     const emailResponse = await resend.emails.send({
       from: "Regozoni Docs <noreply@xn--aceleraoforti-chb.com.br>",
@@ -62,11 +70,10 @@ const handler = async (req: Request): Promise<Response> => {
                   <tr>
                     <td style="padding: 40px;">
                       <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #f2f2f2;">
-                        Olá, ${signatoryName}!
+                        Prezado(a), ${signatoryName}
                       </h2>
-                      <p style="margin: 0 0 24px 0; font-size: 16px; color: #a0a0a0; line-height: 1.6;">
-                        ${senderName || 'Alguém'} enviou um documento para você assinar através da plataforma Regozoni Docs.
-                      </p>
+                      
+                      ${emailBodyContent}
                       
                       <!-- Contract Info Box -->
                       <div style="background-color: rgba(212, 175, 55, 0.1); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 8px; padding: 20px; margin-bottom: 24px;">

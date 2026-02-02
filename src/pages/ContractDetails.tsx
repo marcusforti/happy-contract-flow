@@ -19,11 +19,13 @@ import {
   Download,
   Loader2,
   User,
-  History
+  History,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { extractTextFromPDF } from '@/lib/pdf-utils';
 
 interface Contract {
   id: string;
@@ -71,6 +73,7 @@ const actionLabels: Record<string, string> = {
   downloaded: 'Documento baixado',
   sent: 'Enviado para assinatura',
   certificate_downloaded: 'Certificado baixado',
+  email_resent: 'Email reenviado',
 };
 
 export default function ContractDetails() {
@@ -84,6 +87,7 @@ export default function ContractDetails() {
   const [downloading, setDownloading] = useState(false);
   const [sending, setSending] = useState(false);
   const [downloadingCertificate, setDownloadingCertificate] = useState(false);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -609,6 +613,132 @@ export default function ContractDetails() {
     }
   };
 
+  const resendEmails = async () => {
+    if (!contract || !user || !contract.file_path) return;
+
+    const pendingSignatories = signatories.filter(s => !s.signed_at);
+    if (pendingSignatories.length === 0) {
+      toast.info('Todos os signatários já assinaram o contrato.');
+      return;
+    }
+
+    setResending(true);
+
+    try {
+      // Get sender name from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .single();
+
+      const senderName = profile?.full_name || user.email || 'Regozoni Docs';
+
+      // Fetch PDF from storage to extract text
+      toast.info('Analisando contrato com IA...');
+      
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('contracts')
+        .createSignedUrl(contract.file_path, 60);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        throw new Error('Não foi possível acessar o documento');
+      }
+
+      // Fetch and extract PDF text
+      const response = await fetch(signedUrlData.signedUrl);
+      if (!response.ok) throw new Error('Erro ao baixar documento');
+      
+      const pdfBlob = await response.blob();
+      const pdfFile = new File([pdfBlob], 'contract.pdf', { type: 'application/pdf' });
+      const pdfText = await extractTextFromPDF(pdfFile);
+
+      if (!pdfText || pdfText.length < 50) {
+        throw new Error('Não foi possível extrair texto do PDF');
+      }
+
+      // Send emails to all pending signatories with AI-generated body
+      let emailsSent = 0;
+      let emailsFailed = 0;
+
+      for (const signatory of pendingSignatories) {
+        try {
+          // Generate AI email body for each signatory
+          const { data: aiData, error: aiError } = await supabase.functions.invoke('generate-email-body', {
+            body: {
+              pdfText,
+              contractTitle: contract.title,
+              senderName,
+              signatoryName: signatory.name,
+              expiresAt: contract.expires_at 
+                ? format(new Date(contract.expires_at), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
+                : undefined,
+            },
+          });
+
+          if (aiError) {
+            console.error(`AI error for ${signatory.email}:`, aiError);
+            throw new Error('Erro ao gerar corpo do email');
+          }
+
+          const customBody = aiData?.body;
+          const signingLink = `${window.location.origin}/sign/${signatory.access_token}`;
+
+          // Send email with custom AI-generated body
+          const { data: emailData, error: emailError } = await supabase.functions.invoke('send-signing-email', {
+            body: {
+              to: signatory.email,
+              signatoryName: signatory.name,
+              contractTitle: contract.title,
+              signingLink,
+              senderName,
+              customBody,
+            },
+          });
+
+          if (emailError || !emailData?.success) {
+            console.error(`Failed to send email to ${signatory.email}:`, emailError || emailData?.error);
+            emailsFailed++;
+          } else {
+            emailsSent++;
+          }
+        } catch (err) {
+          console.error(`Error processing signatory ${signatory.email}:`, err);
+          emailsFailed++;
+        }
+      }
+
+      // Log audit
+      await supabase.from('audit_logs').insert({
+        contract_id: contract.id,
+        user_id: user.id,
+        action: 'email_resent',
+        ip_address: 'N/A',
+        user_agent: navigator.userAgent,
+        metadata: { 
+          signatories_notified: emailsSent, 
+          signatories_failed: emailsFailed,
+          ai_generated: true 
+        },
+      });
+
+      if (emailsFailed > 0 && emailsSent > 0) {
+        toast.warning(`${emailsSent} email(s) reenviado(s) com IA, ${emailsFailed} falhou(aram).`);
+      } else if (emailsFailed > 0 && emailsSent === 0) {
+        toast.error('Falha ao reenviar emails. Tente novamente.');
+      } else {
+        toast.success(`${emailsSent} email(s) reenviado(s) com corpo personalizado por IA!`);
+      }
+
+      fetchContractData();
+    } catch (err) {
+      console.error('Error resending emails:', err);
+      toast.error(err instanceof Error ? err.message : 'Erro ao reenviar emails');
+    } finally {
+      setResending(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -804,6 +934,20 @@ export default function ContractDetails() {
                       <Send className="h-4 w-4 mr-2" />
                     )}
                     {sending ? 'Enviando...' : 'Enviar para assinatura'}
+                  </Button>
+                )}
+                {(contract.status === 'pending' || contract.status === 'partially_signed') && (
+                  <Button 
+                    className="w-full btn-gold" 
+                    onClick={resendEmails}
+                    disabled={resending}
+                  >
+                    {resending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    {resending ? 'Gerando email com IA...' : 'Reenviar emails'}
                   </Button>
                 )}
                 {contract.file_path && (
