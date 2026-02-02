@@ -8,16 +8,19 @@ import { FileSignature, Shield, Clock, ArrowRight, Loader2, Quote } from 'lucide
 import logoTransparent from '@/assets/logo-transparent.png';
 import sidneyPhoto from '@/assets/sidney-regozoni.png';
 import heroVideo from '@/assets/hero-video.mp4';
-import heroVideoMobile from '@/assets/hero-video-mobile.mp4';
+import heroMobileBg from '@/assets/hero-mobile-bg.jpg';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const isMobile = useIsMobile();
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Force autoplay on mount and when video source changes
+  // Force autoplay on mount (desktop only)
   useEffect(() => {
+    if (isMobile) return; // Skip for mobile - using image instead
+    
     const video = videoRef.current;
     if (!video) return;
 
@@ -27,13 +30,8 @@ export default function Index() {
       });
     };
 
-    // Try to play immediately
     forcePlay();
-
-    // Also try on canplay event
     video.addEventListener('canplay', forcePlay);
-    
-    // Try again after a short delay (helps with iOS)
     const timeout = setTimeout(forcePlay, 100);
 
     return () => {
@@ -41,9 +39,6 @@ export default function Index() {
       clearTimeout(timeout);
     };
   }, [isMobile]);
-  
-  // Select video source based on device
-  const videoSource = isMobile ? heroVideoMobile : heroVideo;
 
   if (loading) {
     return (
@@ -95,32 +90,43 @@ export default function Index() {
           {/* Premium gradient fallback - always visible */}
           <div className="absolute inset-0 bg-gradient-to-br from-[hsl(0,0%,8%)] via-[hsl(43,20%,6%)] to-[hsl(0,0%,4%)]" />
           
-          {/* Loading skeleton animation - visible while video loads */}
-          {!videoLoaded && (
+          {/* Loading skeleton animation */}
+          {(isMobile ? !imageLoaded : !videoLoaded) && (
             <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-primary/5 to-muted/10 animate-pulse" />
           )}
           
-          {/* Video with smooth fade-in transition - mobile gets compressed version */}
-          <video
-            ref={videoRef}
-            key={isMobile ? 'mobile' : 'desktop'}
-            autoPlay
-            muted
-            loop
-            playsInline
-            // @ts-ignore - webkit-playsinline for older iOS
-            webkit-playsinline="true"
-            preload="auto"
-            controls={false}
-            disablePictureInPicture
-            controlsList="nodownload nofullscreen noremoteplayback"
-            onCanPlay={() => setVideoLoaded(true)}
-            className={`video-background absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-              videoLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <source src={videoSource} type="video/mp4" />
-          </video>
+          {/* Mobile: Static image background */}
+          {isMobile && (
+            <img
+              src={heroMobileBg}
+              alt=""
+              onLoad={() => setImageLoaded(true)}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          )}
+          
+          {/* Desktop: Video background */}
+          {!isMobile && (
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              controls={false}
+              disablePictureInPicture
+              controlsList="nodownload nofullscreen noremoteplayback"
+              onCanPlay={() => setVideoLoaded(true)}
+              className={`video-background absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+                videoLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <source src={heroVideo} type="video/mp4" />
+            </video>
+          )}
           
           {/* Dark overlay with gradient */}
           <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/50 to-background" />
