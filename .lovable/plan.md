@@ -1,198 +1,141 @@
 
-# Plano: Sistema Completo de Notificações por Email
+
+# Plano: Certificado por Email para Todos os Signatários
 
 ## Visão Geral
 
-Implementar notificações por email em três momentos críticos do fluxo de assinatura:
-
-| Momento | Destinatário | Tipo de Email |
-|---------|--------------|---------------|
-| Signatário assina | O próprio signatário | Confirmação da assinatura |
-| Signatário assina | Dono do contrato | Notificação de progresso |
-| Todos assinam | Todos os signatários | Contrato concluído |
+Quando o contrato for concluído (todos assinarem), cada signatário receberá:
+1. **Email de conclusão** (já existe)
+2. **Certificado HTML anexado** ao email (novo)
+3. **Link para baixar** o certificado na plataforma (novo)
 
 ---
 
-## Arquitetura das Notificações
+## Situação Atual
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Signatário Assina                            │
-└─────────────────────────────────────────────────────────────────┘
+| Funcionalidade | Status |
+|----------------|--------|
+| Download do certificado em ContractDetails | ✅ Existe |
+| Email de conclusão para signatários | ✅ Existe |
+| Certificado anexado ao email | ❌ Não existe |
+
+---
+
+## Arquitetura da Solução
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                 Última assinatura coletada                  │
+└─────────────────────────────────────────────────────────────┘
                               │
                               ▼
-         ┌────────────────────┴────────────────────┐
-         │                                         │
-         ▼                                         ▼
-  ┌──────────────┐                        ┌──────────────┐
-  │ Email para   │                        │ Email para   │
-  │ Signatário   │                        │ Dono         │
-  │ (confirmação)│                        │ (progresso)  │
-  └──────────────┘                        └──────────────┘
-         
+              ┌───────────────────────────────┐
+              │   send-all-completion-emails  │
+              └───────────────────────────────┘
                               │
-                              ▼
-                 ┌───────────────────────┐
-                 │  Todos assinaram?     │
-                 └───────────────────────┘
-                         │ SIM
-                         ▼
-              ┌─────────────────────┐
-              │ Email para TODOS    │
-              │ (contrato concluído)│
-              └─────────────────────┘
+           ┌──────────────────┼──────────────────┐
+           │                  │                  │
+           ▼                  ▼                  ▼
+     ┌──────────┐       ┌──────────┐       ┌──────────┐
+     │ João     │       │ Maria    │       │ Pedro    │
+     │ Email +  │       │ Email +  │       │ Email +  │
+     │ Anexo    │       │ Anexo    │       │ Anexo    │
+     └──────────┘       └──────────┘       └──────────┘
+           │                  │                  │
+           └────────> certificado-contrato.html <────────┘
 ```
 
 ---
 
 ## Implementação Técnica
 
-### 1. Nova Edge Function: `send-signature-confirmation`
+### Modificar `send-all-completion-emails`
 
-Envia confirmação ao signatário após ele assinar:
+A edge function será atualizada para:
 
+1. **Buscar dados completos** do contrato, signatários, assinaturas (com IP/user_agent) e audit logs
+2. **Gerar o HTML do certificado** (mesmo template usado no frontend)
+3. **Anexar o certificado** como arquivo HTML no email via Resend
+4. **Incluir CTA** com link para ver detalhes na plataforma
+
+**Dados adicionais a buscar:**
+- Tabela `signatures` (IP, user_agent, signature_type)
+- Tabela `audit_logs` (trilha de auditoria)
+
+**Formato do anexo (Resend API):**
 ```typescript
-// Payload
-{
-  signatoryEmail: string;
-  signatoryName: string;
-  contractTitle: string;
-  signedAt: string;
-  remainingSignatories: number; // "Faltam X assinaturas"
-}
-```
-
-**Template do email:**
-- Banner: "✅ Sua assinatura foi registrada!"
-- Info do contrato assinado
-- Status: "Aguardando X outras assinaturas" ou "Você foi o último, contrato concluído!"
-- Aviso legal sobre validade jurídica
-
----
-
-### 2. Nova Edge Function: `notify-owner-signature`
-
-Notifica o dono do contrato a cada assinatura individual:
-
-```typescript
-// Payload
-{
-  contractId: string;
-  accessToken: string; // para validação
-  origin: string;
-}
-```
-
-**Lógica:**
-- Busca contrato e dono (service role)
-- Busca signatário que acabou de assinar
-- Busca progresso total (X de Y assinaram)
-- Envia email ao dono com status atualizado
-
-**Template do email:**
-- Banner: "✍️ Nova assinatura registrada"
-- Quem assinou (nome + email + horário)
-- Progresso visual: "2 de 3 assinaturas coletadas"
-- CTA: "Ver detalhes do contrato"
-
----
-
-### 3. Modificar `send-owner-completion-email`
-
-Já existe e funciona. Apenas garantir que está sendo chamado corretamente.
-
----
-
-### 4. Nova Edge Function: `send-all-completion-emails`
-
-Envia email de conclusão para TODOS os signatários quando o contrato é finalizado:
-
-```typescript
-// Payload
-{
-  contractId: string;
-  accessToken: string;
-  origin: string;
-}
-```
-
-**Lógica:**
-- Busca todos os signatários do contrato
-- Envia email de conclusão para cada um (reutilizando template do `send-completion-email`)
-- Inclui lista de todos que assinaram + hash do documento
-
----
-
-### 5. Modificar `SigningPage.tsx`
-
-Após a assinatura bem-sucedida, disparar as edge functions:
-
-```typescript
-// Após salvar assinatura com sucesso:
-
-// 1. Confirmar para o signatário
-await supabase.functions.invoke('send-signature-confirmation', {
-  body: {
-    signatoryEmail: signatory.email,
-    signatoryName: signatory.name,
-    contractTitle: contract.title,
-    signedAt: new Date().toISOString(),
-    remainingSignatories: pendingCount,
-  }
-});
-
-// 2. Notificar o dono
-await supabase.functions.invoke('notify-owner-signature', {
-  body: {
-    contractId: contract.id,
-    accessToken: token,
-    origin: window.location.origin,
-  }
-});
-
-// 3. Se todos assinaram, enviar para todos
-if (allSigned) {
-  await supabase.functions.invoke('send-all-completion-emails', {
-    body: {
-      contractId: contract.id,
-      accessToken: token,
-      origin: window.location.origin,
+await resend.emails.send({
+  from: "...",
+  to: [signatory.email],
+  subject: "...",
+  html: "...",
+  attachments: [
+    {
+      filename: "certificado-contrato.html",
+      content: Buffer.from(certificateHtml).toString("base64"),
     }
-  });
-}
+  ]
+});
 ```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Template do Certificado (Anexo)
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `supabase/functions/send-signature-confirmation/index.ts` | Criar | Confirmação para signatário |
-| `supabase/functions/notify-owner-signature/index.ts` | Criar | Notifica dono a cada assinatura |
-| `supabase/functions/send-all-completion-emails/index.ts` | Criar | Email de conclusão para todos |
-| `supabase/config.toml` | Modificar | Registrar novas functions |
-| `src/pages/SigningPage.tsx` | Modificar | Disparar os emails |
+O certificado anexado incluirá:
+- Identificação do documento (título, descrição, hash)
+- Lista completa de signatários com:
+  - Nome e email
+  - Data/hora da assinatura
+  - Endereço IP
+  - Navegador utilizado
+  - Tipo de assinatura (desenhada/digitada)
+- Trilha de auditoria completa
+- Aviso de validade jurídica (Lei 14.063/2020)
+- Visual premium "black & gold"
 
 ---
 
-## Templates de Email (Visual Premium)
+## Email de Conclusão Atualizado
 
-Todos seguirão o padrão visual "black & gold" já estabelecido:
-- Background: #0a0a0a
-- Cards: #141414 com borda dourada
-- Acentos: #D4AF37 (dourado)
-- Sucesso: #10b981 (verde esmeralda)
-- Tipografia clara e hierarquia visual
+O email terá:
+- Banner de sucesso "Contrato Concluído"
+- Informações do contrato
+- Lista de quem assinou
+- **Botão "📜 Baixar Certificado"** (link para ContractDetails)
+- **Anexo HTML** do certificado
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/send-all-completion-emails/index.ts` | Gerar e anexar certificado, buscar dados completos |
+
+---
+
+## Fluxo de Dados
+
+1. `SigningPage.tsx` detecta que todos assinaram
+2. Chama `send-all-completion-emails`
+3. Edge function:
+   - Busca contrato + signatários
+   - Busca assinaturas (IP, navegador)
+   - Busca audit_logs
+   - Gera HTML do certificado
+   - Envia email para cada signatário com anexo
+4. Cada signatário recebe email com certificado anexado
 
 ---
 
 ## Resultado Esperado
 
-| Cenário | Emails Disparados |
-|---------|-------------------|
-| João assina (1 de 3) | João recebe confirmação + Dono recebe notificação |
-| Maria assina (2 de 3) | Maria recebe confirmação + Dono recebe notificação |
-| Pedro assina (3 de 3) | Pedro recebe confirmação + Dono recebe notificação + TODOS recebem email de conclusão |
+| Cenário | O que acontece |
+|---------|----------------|
+| Pedro assina (último) | Todos (João, Maria, Pedro) recebem email com certificado anexado |
+| Qualquer signatário abre o email | Pode baixar o certificado direto do anexo |
+| Signatário acessa a plataforma | Pode baixar o certificado pelo botão (já existe) |
 
-**Experiência completa de gestão documental com rastreabilidade total!**
+**Rastreabilidade completa com certificado oficial entregue automaticamente!**
+
