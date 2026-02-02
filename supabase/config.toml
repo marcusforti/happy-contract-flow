@@ -1,1 +1,7 @@
 project_id = "rozpvvzxzjdsocezpdmk"
+
+[functions.analyze-contract]
+verify_jwt = false
+
+[functions.send-signing-email]
+verify_jwt = false
