@@ -120,7 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
                           <td align="center">
                             <a href="${signingLink}" 
                                style="display: inline-block; background: linear-gradient(135deg, #D4AF37, #B8860B); color: #0a0a0a; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                              Revisar e Assinar
+                              Ler e Assinar Documento
                             </a>
                           </td>
                         </tr>
