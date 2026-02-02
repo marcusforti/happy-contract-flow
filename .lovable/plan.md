@@ -1,105 +1,95 @@
 
 
-## Branding Exclusivo - Dr. Sidney Regozoni
+## Implementar Download de Certificado de Conclusao
 
 ### Visao Geral
 
-Transformacao completa da identidade visual da plataforma SignDoc para criar uma ferramenta exclusiva e premium alinhada com a marca pessoal do Dr. Sidney Regozoni.
+O botao "Baixar certificado" ja existe na interface quando o contrato esta com status "completed", mas nao tem funcionalidade. Vamos implementar a geracao e download de um certificado de conclusao em formato HTML/PDF.
 
-### Paleta de Cores
+### O Que e o Certificado
 
-Baseada no perfil do Instagram do cliente:
+Documento que comprova a validade juridica da assinatura eletronica, contendo:
 
-| Elemento | Cor Atual | Nova Cor (HSL) |
-|----------|-----------|----------------|
-| Background | Branco | Preto profundo (#0A0A0A) |
-| Foreground | Escuro | Branco/Cinza claro |
-| Primary | Azul escuro | Dourado (#D4AF37) |
-| Accent | Cinza | Dourado escuro (#B8860B) |
-| Cards | Branco | Cinza escuro (#1A1A1A) |
-| Borders | Cinza claro | Cinza escuro/Dourado sutil |
+- **Identificacao do Contrato**: Titulo, descricao, data de criacao
+- **Hash do Documento**: SHA-256 para verificacao de integridade
+- **Lista de Signatarios**: Nome, email, data/hora da assinatura, IP e navegador
+- **Trilha de Auditoria**: Principais eventos (criacao, envio, assinaturas)
+- **Declaracao Legal**: Referencia a Lei 14.063/2020 (assinatura eletronica simples)
 
-### Identidade da Marca
+### Alteracoes no Arquivo
 
-**Nome Sugerido**: "Regozoni Docs" ou "Smart Legal Sign" (baseado no logo SMART que aparece nos videos)
+**src/pages/ContractDetails.tsx**
 
-**Elementos**:
-- Logo customizado com as iniciais "SR" ou escudo juridico
-- Tipografia elegante e profissional
-- Icones com bordas douradas sutis
+1. Adicionar estado `downloadingCertificate`
 
-### Arquivos a Modificar
+2. Criar funcao `downloadCertificate`:
+   - Buscar assinaturas com detalhes (IP, user_agent, timestamp)
+   - Gerar HTML estilizado com branding Regozoni Docs
+   - Converter para blob e disparar download
+   - Registrar audit log
 
-**1. src/index.css** - Sistema de cores
-- Remover tema claro (deixar apenas dark mode)
-- Redefinir todas as variaveis CSS para a nova paleta
-- Adicionar gradientes dourados
-
-**2. src/pages/Index.tsx** - Landing Page
-- Novo header com logo/nome personalizado
-- Hero section com visual premium
-- Features cards com bordas douradas
-- Footer com creditos "by Sidney Regozoni"
-
-**3. src/pages/Auth.tsx** - Pagina de Login
-- Card com borda dourada sutil
-- Logo personalizado no topo
-- Visual mais elegante
-
-**4. src/pages/Dashboard.tsx** - Painel Principal
-- Header com marca personalizada
-- Cards com visual premium
-- Estatisticas com destaque dourado
-
-**5. src/pages/SigningPage.tsx** - Pagina de Assinatura
-- Branding visivel para quem recebe o contrato
-- Visual profissional e confiavel
-
-**6. Outros arquivos**
-- ContractDetails.tsx
-- NewContract.tsx
+3. Conectar funcao ao botao existente (linha 480-485)
 
 ### Detalhes Tecnicos
 
 ```text
-Nova Paleta CSS:
-┌─────────────────────────────────────────┐
-│  :root (Dark Mode Only)                 │
-├─────────────────────────────────────────┤
-│  --background: 0 0% 4%      (#0A0A0A)   │
-│  --foreground: 0 0% 95%     (#F2F2F2)   │
-│  --card: 0 0% 8%            (#141414)   │
-│  --primary: 43 76% 52%      (#D4AF37)   │
-│  --accent: 43 76% 38%       (#B8860B)   │
-│  --muted: 0 0% 15%          (#262626)   │
-│  --border: 43 30% 20%       (Gold hint) │
-└─────────────────────────────────────────┘
+Estrutura do Certificado:
++------------------------------------------+
+|       CERTIFICADO DE CONCLUSAO           |
+|         Regozoni Docs                     |
++------------------------------------------+
+| Contrato: [Titulo]                        |
+| Criado em: [Data]                         |
+| Concluido em: [Data]                      |
+| Hash SHA-256: [Hash do documento]         |
++------------------------------------------+
+|           SIGNATARIOS                     |
++------------------------------------------+
+| Nome: Fulano                              |
+| Email: fulano@email.com                   |
+| Assinado em: 02/02/2026 14:30:00          |
+| IP: 192.168.1.1                           |
+| Navegador: Chrome/Windows                 |
++------------------------------------------+
+| Nome: Ciclano                             |
+| ...                                       |
++------------------------------------------+
+|       TRILHA DE AUDITORIA                 |
++------------------------------------------+
+| 02/02/2026 10:00 - Contrato criado        |
+| 02/02/2026 10:05 - Enviado para assinatura|
+| 02/02/2026 14:30 - Fulano assinou         |
+| 02/02/2026 15:45 - Ciclano assinou        |
+| 02/02/2026 15:45 - Contrato concluido     |
++------------------------------------------+
+|       VALIDADE JURIDICA                   |
+| Lei 14.063/2020 - Assinatura Eletronica   |
++------------------------------------------+
 ```
 
-### Recursos Adicionais
+### Dados Necessarios
 
-**Gradientes Premium**:
-- Background com gradiente sutil preto/cinza escuro
-- Botoes com gradiente dourado
-- Bordas com brilho dourado sutil
+Buscar da tabela `signatures`:
+- IP do signatario
+- User agent (navegador)
+- Data/hora da assinatura
+- Tipo de assinatura (drawn/typed)
 
-**Efeitos Visuais**:
-- Hover states com brilho dourado
-- Sombras sutis douradas em cards importantes
-- Transicoes suaves
+Ja disponivel no estado atual:
+- Contrato (titulo, hash, datas)
+- Signatarios (nome, email, signed_at)
+- Audit logs (eventos)
 
-### Proximos Passos
+### Formato do Download
 
-1. Definir nome final da marca (sugestoes: "Regozoni Docs", "Smart Legal", "SR Sign")
-2. Implementar nova paleta de cores no CSS
-3. Atualizar todas as paginas com a nova identidade
-4. Adicionar logo/icone personalizado (se fornecido)
+O certificado sera gerado como HTML com CSS inline e baixado como arquivo `.html`. O usuario pode abrir no navegador e imprimir/salvar como PDF se desejar.
 
-### Pergunta para o Usuario
+### Fluxo da Funcao
 
-Qual nome voce prefere para a ferramenta?
-- **Regozoni Docs** - direto ao ponto, sua marca
-- **Smart Legal Sign** - baseado no "Smart" que aparece no seu conteudo
-- **SR Sign** - minimalista com suas iniciais
-- **Outro nome** - me diga qual prefere
+1. Verificar se contrato esta concluido
+2. Buscar assinaturas detalhadas do banco
+3. Montar HTML com dados do contrato, signatarios e auditoria
+4. Criar blob e disparar download
+5. Registrar no audit_logs: "certificate_downloaded"
+6. Mostrar toast de sucesso
 
