@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { FileSignature, Shield, Clock, ArrowRight, Loader2, Quote } from 'lucide-react';
+import { FileSignature, Shield, Clock, ArrowRight, Loader2, Quote, Play } from 'lucide-react';
 import logoTransparent from '@/assets/logo-transparent.png';
 import sidneyPhoto from '@/assets/sidney-regozoni.png';
 import heroVideo from '@/assets/hero-video.mp4';
@@ -103,11 +103,18 @@ export default function Index() {
               </span>
             </div>
             
-            <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold mb-4 sm:mb-8 tracking-tight">
+            <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold mb-4 sm:mb-6 tracking-tight">
               <span className="gold-text">Governo Jurídico</span>
               <br />
               <span className="text-foreground">Digital</span>
             </h1>
+            
+            {/* Play button indicator */}
+            <div className="flex justify-center mb-4 sm:mb-6">
+              <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-transparent border-2 border-foreground/30 flex items-center justify-center">
+                <Play className="h-5 w-5 sm:h-6 sm:w-6 text-foreground/60 ml-1" fill="currentColor" />
+              </div>
+            </div>
             
             <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
               Menos improviso. Menos surpresa.
