@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -14,6 +14,33 @@ export default function Index() {
   const { user, loading } = useAuth();
   const isMobile = useIsMobile();
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Force autoplay on mount and when video source changes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const forcePlay = () => {
+      video.play().catch(() => {
+        // Silently handle autoplay restrictions
+      });
+    };
+
+    // Try to play immediately
+    forcePlay();
+
+    // Also try on canplay event
+    video.addEventListener('canplay', forcePlay);
+    
+    // Try again after a short delay (helps with iOS)
+    const timeout = setTimeout(forcePlay, 100);
+
+    return () => {
+      video.removeEventListener('canplay', forcePlay);
+      clearTimeout(timeout);
+    };
+  }, [isMobile]);
   
   // Select video source based on device
   const videoSource = isMobile ? heroVideoMobile : heroVideo;
@@ -75,11 +102,14 @@ export default function Index() {
           
           {/* Video with smooth fade-in transition - mobile gets compressed version */}
           <video
+            ref={videoRef}
             key={isMobile ? 'mobile' : 'desktop'}
             autoPlay
             muted
             loop
             playsInline
+            // @ts-ignore - webkit-playsinline for older iOS
+            webkit-playsinline="true"
             preload="auto"
             controls={false}
             disablePictureInPicture
