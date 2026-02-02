@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -16,187 +17,321 @@ interface SendAllCompletionRequest {
   origin: string;
 }
 
-// Generate the certificate HTML
-function generateCertificateHtml(
+// Generate PDF certificate
+function generateCertificatePdf(
   contract: { title: string; description: string | null; document_hash: string | null; created_at: string },
-  signatories: Array<{ name: string; email: string; signed_at: string | null }>,
+  signatories: Array<{ id: string; name: string; email: string; signed_at: string | null }>,
   signatures: Array<{ ip_address: string; user_agent: string; signature_type: string; created_at: string; signatory_id: string }>,
   auditLogs: Array<{ action: string; created_at: string; ip_address: string | null; user_agent: string | null; metadata: any }>
 ): string {
-  const completedAt = new Date().toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'medium' });
-  
-  // Map signatures to signatories
-  const signatorySignatures = new Map<string, typeof signatures[0]>();
-  signatures.forEach(sig => signatorySignatures.set(sig.signatory_id, sig));
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
 
-  const signatoriesHtml = signatories.map((sig, idx) => {
-    const signature = signatures.find(s => s.signatory_id === (sig as any).id);
-    const signedAt = sig.signed_at 
-      ? new Date(sig.signed_at).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'medium' })
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - (margin * 2);
+  let yPos = margin;
+
+  // Colors
+  const goldColor = [212, 175, 55] as [number, number, number];
+  const darkBg = [20, 20, 20] as [number, number, number];
+  const textWhite = [242, 242, 242] as [number, number, number];
+  const textGray = [160, 160, 160] as [number, number, number];
+  const textDarkGray = [136, 136, 136] as [number, number, number];
+  const greenColor = [16, 185, 129] as [number, number, number];
+
+  // Background
+  doc.setFillColor(10, 10, 10);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  // Main container background
+  doc.setFillColor(...darkBg);
+  doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
+
+  // Gold border
+  doc.setDrawColor(...goldColor);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'S');
+
+  // Header with gradient effect (simplified as solid color)
+  doc.setFillColor(30, 28, 20);
+  doc.roundedRect(margin, yPos, contentWidth, 35, 2, 2, 'F');
+
+  // Certificate icon (emoji replacement with text)
+  doc.setFontSize(24);
+  doc.setTextColor(...goldColor);
+  doc.text('📜', pageWidth / 2, yPos + 12, { align: 'center' });
+
+  // Title
+  doc.setFontSize(18);
+  doc.setTextColor(...goldColor);
+  doc.text('CERTIFICADO DE CONCLUSÃO', pageWidth / 2, yPos + 22, { align: 'center' });
+
+  doc.setFontSize(9);
+  doc.setTextColor(...textDarkGray);
+  doc.text('Documento assinado eletronicamente', pageWidth / 2, yPos + 30, { align: 'center' });
+
+  yPos += 45;
+
+  // Document Info Section
+  doc.setFillColor(25, 23, 18);
+  doc.roundedRect(margin, yPos, contentWidth, 45, 2, 2, 'F');
+  doc.setDrawColor(...goldColor);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, yPos, contentWidth, 45, 2, 2, 'S');
+
+  doc.setFontSize(8);
+  doc.setTextColor(...textDarkGray);
+  doc.text('DOCUMENTO', margin + 5, yPos + 8);
+
+  doc.setFontSize(14);
+  doc.setTextColor(...goldColor);
+  const titleLines = doc.splitTextToSize(contract.title, contentWidth - 10);
+  doc.text(titleLines, margin + 5, yPos + 16);
+
+  const titleHeight = titleLines.length * 5;
+
+  if (contract.description) {
+    doc.setFontSize(9);
+    doc.setTextColor(...textGray);
+    const descLines = doc.splitTextToSize(contract.description, contentWidth - 10);
+    doc.text(descLines.slice(0, 2), margin + 5, yPos + titleHeight + 14);
+  }
+
+  const createdAt = new Date(contract.created_at).toLocaleDateString('pt-BR', { dateStyle: 'long' });
+  const completedAt = new Date().toLocaleDateString('pt-BR', { dateStyle: 'long' });
+
+  doc.setFontSize(7);
+  doc.setTextColor(...textDarkGray);
+  doc.text('CRIADO EM', margin + 5, yPos + 35);
+  doc.setTextColor(...textWhite);
+  doc.setFontSize(8);
+  doc.text(createdAt, margin + 5, yPos + 40);
+
+  doc.setFontSize(7);
+  doc.setTextColor(...textDarkGray);
+  doc.text('CONCLUÍDO EM', margin + 60, yPos + 35);
+  doc.setTextColor(...greenColor);
+  doc.setFontSize(8);
+  doc.text(completedAt, margin + 60, yPos + 40);
+
+  doc.setFontSize(7);
+  doc.setTextColor(...textDarkGray);
+  doc.text('SIGNATÁRIOS', margin + 120, yPos + 35);
+  doc.setTextColor(...textWhite);
+  doc.setFontSize(8);
+  doc.text(`${signatories.length} pessoa(s)`, margin + 120, yPos + 40);
+
+  yPos += 55;
+
+  // Signatories Section
+  doc.setFontSize(10);
+  doc.setTextColor(...goldColor);
+  doc.text('✍️ ASSINATURAS COLETADAS', margin, yPos);
+  yPos += 8;
+
+  signatories.forEach((sig, idx) => {
+    const signature = signatures.find(s => s.signatory_id === sig.id);
+    const signedAt = sig.signed_at
+      ? new Date(sig.signed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
       : 'N/A';
-    
-    return `
-      <div style="background: #1a1a1a; border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-          <div>
-            <span style="color: #D4AF37; font-weight: 600; font-size: 14px;">Signatário ${idx + 1}</span>
-            <h3 style="margin: 4px 0 0 0; color: #f2f2f2; font-size: 18px;">${sig.name}</h3>
-            <p style="margin: 4px 0 0 0; color: #888; font-size: 13px;">${sig.email}</p>
-          </div>
-          <span style="background: #166534; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px;">✓ Assinado</span>
-        </div>
-        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Data/Hora</p>
-            <p style="margin: 4px 0 0 0; font-size: 13px; color: #a0a0a0;">${signedAt}</p>
-          </div>
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Tipo</p>
-            <p style="margin: 4px 0 0 0; font-size: 13px; color: #a0a0a0;">${signature?.signature_type === 'draw' ? '✍️ Desenhada' : '⌨️ Digitada'}</p>
-          </div>
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Endereço IP</p>
-            <p style="margin: 4px 0 0 0; font-size: 13px; color: #a0a0a0; font-family: monospace;">${signature?.ip_address || 'N/A'}</p>
-          </div>
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Navegador</p>
-            <p style="margin: 4px 0 0 0; font-size: 13px; color: #a0a0a0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${signature?.user_agent?.substring(0, 50) || 'N/A'}...</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
 
-  const auditLogsHtml = auditLogs.map(log => {
-    const timestamp = new Date(log.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
-    const actionLabels: Record<string, string> = {
-      'contract_created': '📄 Contrato criado',
-      'contract_sent': '📤 Contrato enviado',
-      'contract_viewed': '👁️ Contrato visualizado',
-      'signature_added': '✍️ Assinatura registrada',
-      'contract_completed': '✅ Contrato concluído',
-    };
-    return `
-      <tr>
-        <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #888; font-size: 12px;">${timestamp}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #f2f2f2; font-size: 13px;">${actionLabels[log.action] || log.action}</td>
-        <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #666; font-size: 11px; font-family: monospace;">${log.ip_address || '-'}</td>
-      </tr>
-    `;
-  }).join('');
-
-  return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Certificado de Assinatura - ${contract.title}</title>
-  <style>
-    @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    // Check if we need a new page
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = margin;
+      // Add background to new page
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      doc.setFillColor(...darkBg);
+      doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
     }
-  </style>
-</head>
-<body style="margin: 0; padding: 40px; background: #0a0a0a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #f2f2f2;">
-  <div style="max-width: 800px; margin: 0 auto; background: #141414; border-radius: 16px; border: 1px solid rgba(212, 175, 55, 0.3); overflow: hidden;">
-    
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.05) 100%); padding: 32px; text-align: center; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
-      <div style="font-size: 48px; margin-bottom: 8px;">📜</div>
-      <h1 style="margin: 0; font-size: 28px; font-weight: bold; background: linear-gradient(135deg, #D4AF37, #B8860B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-        Certificado de Conclusão
-      </h1>
-      <p style="margin: 8px 0 0 0; color: #888; font-size: 14px;">Documento assinado eletronicamente</p>
-    </div>
 
-    <!-- Content -->
-    <div style="padding: 32px;">
-      
-      <!-- Document Info -->
-      <div style="background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 24px; margin-bottom: 32px;">
-        <p style="margin: 0 0 4px 0; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Documento</p>
-        <h2 style="margin: 0 0 8px 0; font-size: 24px; color: #D4AF37; font-weight: 700;">${contract.title}</h2>
-        ${contract.description ? `<p style="margin: 0 0 16px 0; color: #a0a0a0; font-size: 14px;">${contract.description}</p>` : ''}
-        <div style="display: flex; gap: 32px; flex-wrap: wrap;">
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Criado em</p>
-            <p style="margin: 4px 0 0 0; font-size: 14px; color: #f2f2f2;">${new Date(contract.created_at).toLocaleString('pt-BR', { dateStyle: 'long' })}</p>
-          </div>
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Concluído em</p>
-            <p style="margin: 4px 0 0 0; font-size: 14px; color: #10b981;">${completedAt}</p>
-          </div>
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #666; text-transform: uppercase;">Signatários</p>
-            <p style="margin: 4px 0 0 0; font-size: 14px; color: #f2f2f2;">${signatories.length} pessoa(s)</p>
-          </div>
-        </div>
-      </div>
+    // Signatory box
+    doc.setFillColor(26, 26, 26);
+    doc.roundedRect(margin, yPos, contentWidth, 28, 2, 2, 'F');
 
-      <!-- Signatories -->
-      <div style="margin-bottom: 32px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #D4AF37; display: flex; align-items: center; gap: 8px;">
-          <span>✍️</span> Assinaturas Coletadas
-        </h3>
-        ${signatoriesHtml}
-      </div>
+    // Signatory number
+    doc.setFontSize(8);
+    doc.setTextColor(...goldColor);
+    doc.text(`Signatário ${idx + 1}`, margin + 4, yPos + 6);
 
-      <!-- Document Hash -->
-      ${contract.document_hash ? `
-      <div style="background: #1a1a1a; border-radius: 8px; padding: 16px; margin-bottom: 32px; border: 1px solid rgba(255,255,255,0.05);">
-        <p style="margin: 0 0 8px 0; font-size: 11px; color: #666; text-transform: uppercase;">Hash SHA-256 do Documento (Integridade)</p>
-        <p style="margin: 0; font-size: 11px; color: #888; font-family: 'Courier New', monospace; word-break: break-all;">${contract.document_hash}</p>
-      </div>
-      ` : ''}
+    // Status badge
+    doc.setFillColor(22, 101, 52);
+    doc.roundedRect(margin + contentWidth - 25, yPos + 2, 22, 6, 1, 1, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(255, 255, 255);
+    doc.text('✓ Assinado', margin + contentWidth - 24, yPos + 6);
 
-      <!-- Audit Trail -->
-      <div style="margin-bottom: 32px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #D4AF37; display: flex; align-items: center; gap: 8px;">
-          <span>📋</span> Trilha de Auditoria
-        </h3>
-        <div style="background: #1a1a1a; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
-          <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr style="background: rgba(212, 175, 55, 0.1);">
-                <th style="padding: 12px; text-align: left; font-size: 11px; color: #888; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1);">Data/Hora</th>
-                <th style="padding: 12px; text-align: left; font-size: 11px; color: #888; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1);">Ação</th>
-                <th style="padding: 12px; text-align: left; font-size: 11px; color: #888; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1);">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${auditLogsHtml}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    // Name and email
+    doc.setFontSize(11);
+    doc.setTextColor(...textWhite);
+    doc.text(sig.name, margin + 4, yPos + 13);
 
-      <!-- Legal Notice -->
-      <div style="background: rgba(212, 175, 55, 0.08); border-left: 4px solid #D4AF37; border-radius: 0 8px 8px 0; padding: 20px;">
-        <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #D4AF37;">⚖️ Validade Jurídica</h4>
-        <p style="margin: 0; font-size: 13px; color: #999; line-height: 1.6;">
-          Este documento foi assinado eletronicamente em conformidade com a <strong style="color: #D4AF37;">Lei nº 14.063/2020</strong> 
-          que estabelece regras e requisitos mínimos para a comunicação digital. A assinatura eletrônica simples utilizada 
-          neste documento possui validade jurídica quando associada a dados de identificação do signatário e registros de auditoria, 
-          conforme demonstrado neste certificado.
-        </p>
-      </div>
-    </div>
+    doc.setFontSize(8);
+    doc.setTextColor(...textDarkGray);
+    doc.text(sig.email, margin + 4, yPos + 18);
 
-    <!-- Footer -->
-    <div style="padding: 24px 32px; text-align: center; border-top: 1px solid rgba(212, 175, 55, 0.15); background: #0f0f0f;">
-      <p style="margin: 0 0 4px 0; font-size: 14px; color: #D4AF37; font-weight: 600;">⚖️ Regozoni Docs</p>
-      <p style="margin: 0; font-size: 11px; color: #666;">
-        Certificado gerado automaticamente em ${completedAt}
-      </p>
-      <p style="margin: 8px 0 0 0; font-size: 10px; color: #444;">
-        © 2024 Dr. Sidney Regozoni. Todos os direitos reservados.
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
+    // Signature details
+    doc.setFontSize(6);
+    doc.setTextColor(...textDarkGray);
+    doc.text('DATA/HORA', margin + 4, yPos + 23);
+    doc.text('TIPO', margin + 45, yPos + 23);
+    doc.text('IP', margin + 80, yPos + 23);
+
+    doc.setFontSize(7);
+    doc.setTextColor(...textGray);
+    doc.text(signedAt, margin + 4, yPos + 27);
+    doc.text(signature?.signature_type === 'draw' ? 'Desenhada' : 'Digitada', margin + 45, yPos + 27);
+    doc.text(signature?.ip_address || 'N/A', margin + 80, yPos + 27);
+
+    yPos += 32;
+  });
+
+  yPos += 5;
+
+  // Document Hash
+  if (contract.document_hash) {
+    if (yPos > pageHeight - 40) {
+      doc.addPage();
+      yPos = margin;
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      doc.setFillColor(...darkBg);
+      doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
+    }
+
+    doc.setFillColor(26, 26, 26);
+    doc.roundedRect(margin, yPos, contentWidth, 18, 2, 2, 'F');
+
+    doc.setFontSize(7);
+    doc.setTextColor(...textDarkGray);
+    doc.text('HASH SHA-256 DO DOCUMENTO (INTEGRIDADE)', margin + 4, yPos + 6);
+
+    doc.setFontSize(5);
+    doc.setTextColor(...textGray);
+    const hashLines = doc.splitTextToSize(contract.document_hash, contentWidth - 8);
+    doc.text(hashLines, margin + 4, yPos + 12);
+
+    yPos += 23;
+  }
+
+  // Audit Trail
+  if (auditLogs && auditLogs.length > 0) {
+    if (yPos > pageHeight - 50) {
+      doc.addPage();
+      yPos = margin;
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      doc.setFillColor(...darkBg);
+      doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
+    }
+
+    doc.setFontSize(10);
+    doc.setTextColor(...goldColor);
+    doc.text('📋 TRILHA DE AUDITORIA', margin, yPos);
+    yPos += 6;
+
+    const actionLabels: Record<string, string> = {
+      'contract_created': 'Contrato criado',
+      'contract_sent': 'Contrato enviado',
+      'contract_viewed': 'Contrato visualizado',
+      'signature_added': 'Assinatura registrada',
+      'contract_completed': 'Contrato concluído',
+    };
+
+    // Table header
+    doc.setFillColor(30, 28, 20);
+    doc.roundedRect(margin, yPos, contentWidth, 8, 1, 1, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(...textDarkGray);
+    doc.text('DATA/HORA', margin + 4, yPos + 5);
+    doc.text('AÇÃO', margin + 50, yPos + 5);
+    doc.text('IP', margin + 130, yPos + 5);
+    yPos += 9;
+
+    auditLogs.slice(0, 10).forEach((log) => {
+      if (yPos > pageHeight - 25) {
+        doc.addPage();
+        yPos = margin;
+        doc.setFillColor(10, 10, 10);
+        doc.rect(0, 0, pageWidth, pageHeight, 'F');
+        doc.setFillColor(...darkBg);
+        doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
+      }
+
+      const timestamp = new Date(log.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+
+      doc.setFillColor(26, 26, 26);
+      doc.rect(margin, yPos, contentWidth, 7, 'F');
+
+      doc.setFontSize(6);
+      doc.setTextColor(...textDarkGray);
+      doc.text(timestamp, margin + 4, yPos + 5);
+
+      doc.setTextColor(...textWhite);
+      doc.text(actionLabels[log.action] || log.action, margin + 50, yPos + 5);
+
+      doc.setTextColor(...textDarkGray);
+      doc.text(log.ip_address || '-', margin + 130, yPos + 5);
+
+      yPos += 8;
+    });
+
+    yPos += 5;
+  }
+
+  // Legal Notice
+  if (yPos > pageHeight - 35) {
+    doc.addPage();
+    yPos = margin;
+    doc.setFillColor(10, 10, 10);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    doc.setFillColor(...darkBg);
+    doc.roundedRect(margin - 5, margin - 5, contentWidth + 10, pageHeight - margin * 2 + 10, 3, 3, 'F');
+  }
+
+  doc.setFillColor(25, 23, 15);
+  doc.roundedRect(margin, yPos, contentWidth, 25, 2, 2, 'F');
+
+  // Gold left border
+  doc.setFillColor(...goldColor);
+  doc.rect(margin, yPos, 2, 25, 'F');
+
+  doc.setFontSize(9);
+  doc.setTextColor(...goldColor);
+  doc.text('⚖️ Validade Jurídica', margin + 6, yPos + 7);
+
+  doc.setFontSize(7);
+  doc.setTextColor(...textGray);
+  const legalText = 'Este documento foi assinado eletronicamente em conformidade com a Lei nº 14.063/2020 que estabelece regras e requisitos mínimos para a comunicação digital. A assinatura eletrônica simples utilizada neste documento possui validade jurídica quando associada a dados de identificação do signatário e registros de auditoria.';
+  const legalLines = doc.splitTextToSize(legalText, contentWidth - 12);
+  doc.text(legalLines, margin + 6, yPos + 13);
+
+  yPos += 30;
+
+  // Footer
+  doc.setFillColor(15, 15, 15);
+  doc.rect(margin, pageHeight - margin - 15, contentWidth, 15, 'F');
+
+  doc.setFontSize(10);
+  doc.setTextColor(...goldColor);
+  doc.text('⚖️ Regozoni Docs', pageWidth / 2, pageHeight - margin - 9, { align: 'center' });
+
+  doc.setFontSize(6);
+  doc.setTextColor(...textDarkGray);
+  doc.text(`Certificado gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'medium' })}`, pageWidth / 2, pageHeight - margin - 4, { align: 'center' });
+
+  doc.setFontSize(5);
+  doc.setTextColor(68, 68, 68);
+  doc.text('© 2024 Dr. Sidney Regozoni. Todos os direitos reservados.', pageWidth / 2, pageHeight - margin, { align: 'center' });
+
+  // Return as base64
+  return doc.output('datauristring').split(',')[1];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -211,7 +346,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("contractId e accessToken são obrigatórios");
     }
 
-    console.log(`Sending completion emails with certificate to all signatories for contract: ${contractId}`);
+    console.log(`Sending completion emails with PDF certificate to all signatories for contract: ${contractId}`);
 
     // Create admin client
     const supabaseAdmin = createClient(
@@ -278,18 +413,15 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Error fetching audit logs:", auditError);
     }
 
-    // Generate certificate HTML
-    const certificateHtml = generateCertificateHtml(
+    // Generate PDF certificate
+    console.log("Generating PDF certificate...");
+    const certificateBase64 = generateCertificatePdf(
       contract,
       signatories,
       signatures || [],
       auditLogs || []
     );
-
-    // Convert certificate to base64 for attachment
-    const encoder = new TextEncoder();
-    const certificateBytes = encoder.encode(certificateHtml);
-    const certificateBase64 = btoa(String.fromCharCode(...certificateBytes));
+    console.log("PDF certificate generated successfully");
 
     const completedAt = new Date().toLocaleString('pt-BR', { 
       dateStyle: 'long', 
@@ -320,7 +452,7 @@ const handler = async (req: Request): Promise<Response> => {
       </tr>
     `).join('');
 
-    // Send email to each signatory with certificate attached
+    // Send email to each signatory with PDF certificate attached
     const emailPromises = signatories.map(signatory => {
       return resend.emails.send({
         from: "Regozoni Docs <noreply@equipe.aceleracaoforti.online>",
@@ -401,7 +533,7 @@ const handler = async (req: Request): Promise<Response> => {
                         <!-- Certificate Download CTA -->
                         <div style="text-align: center; margin: 32px 0;">
                           <p style="margin: 0 0 16px 0; font-size: 14px; color: #a0a0a0;">
-                            📎 O certificado completo está anexado a este email
+                            📎 O certificado PDF está anexado a este email
                           </p>
                         </div>
 
@@ -416,7 +548,7 @@ const handler = async (req: Request): Promise<Response> => {
                         <!-- Legal Notice -->
                         <div style="margin-top: 32px; padding: 16px; background: rgba(212, 175, 55, 0.08); border-left: 3px solid #D4AF37; border-radius: 0 8px 8px 0;">
                           <p style="margin: 0; font-size: 12px; color: #999; line-height: 1.6;">
-                            <strong style="color: #D4AF37;">⚖️ Validade Jurídica:</strong> Este contrato foi assinado eletronicamente em conformidade com a Lei nº 14.063/2020. A trilha de auditoria completa está disponível no certificado anexo.
+                            <strong style="color: #D4AF37;">⚖️ Validade Jurídica:</strong> Este contrato foi assinado eletronicamente em conformidade com a Lei nº 14.063/2020. A trilha de auditoria completa está disponível no certificado PDF anexo.
                           </p>
                         </div>
                       </td>
@@ -442,7 +574,7 @@ const handler = async (req: Request): Promise<Response> => {
         `,
         attachments: [
           {
-            filename: `certificado-${contract.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.html`,
+            filename: `certificado-${contract.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.pdf`,
             content: certificateBase64,
           }
         ],
@@ -454,7 +586,7 @@ const handler = async (req: Request): Promise<Response> => {
     const successCount = results.filter(r => r.status === 'fulfilled').length;
     const failedCount = results.filter(r => r.status === 'rejected').length;
 
-    console.log(`Completion emails with certificate sent: ${successCount} success, ${failedCount} failed`);
+    console.log(`Completion emails with PDF certificate sent: ${successCount} success, ${failedCount} failed`);
 
     return new Response(JSON.stringify({ 
       success: true, 
