@@ -6,10 +6,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ArrowRight, ArrowLeft, User, Mail, Download } from 'lucide-react';
+import { Scale, Pen, Type, Check, Loader2, AlertCircle, FileText, ArrowRight, ArrowLeft, User, Mail, Download, FileType } from 'lucide-react';
 import { toast } from 'sonner';
 import SignatureCanvas from 'react-signature-canvas';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Helper to check if file is a PDF (can be rendered in iframe)
+const isPdfFile = (filePath: string | null): boolean => {
+  if (!filePath) return false;
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  return ext === 'pdf';
+};
+
+const isWordFile = (filePath: string | null): boolean => {
+  if (!filePath) return false;
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  return ext === 'doc' || ext === 'docx';
+};
 
 interface Contract {
   id: string;
@@ -526,7 +539,7 @@ export default function SigningPage() {
                 </CardContent>
               </Card>
 
-              {/* PDF Viewer */}
+              {/* Document Viewer */}
               <Card className="card-premium gold-border overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b border-border py-4">
                   <div className="flex items-center justify-between">
@@ -544,7 +557,7 @@ export default function SigningPage() {
                         className="gap-2"
                       >
                         <Download className="h-4 w-4" />
-                        <span className="hidden sm:inline">Baixar PDF</span>
+                        <span className="hidden sm:inline">Baixar</span>
                       </Button>
                     )}
                   </div>
@@ -557,12 +570,35 @@ export default function SigningPage() {
                         <p className="text-sm text-muted-foreground">Carregando documento...</p>
                       </div>
                     </div>
-                  ) : pdfUrl ? (
+                  ) : pdfUrl && isPdfFile(contract?.file_path) ? (
                     <iframe
                       src={`${pdfUrl}#view=FitH&toolbar=0&navpanes=0`}
                       className="w-full h-[500px] md:h-[650px] border-0"
                       title="Documento para assinatura"
                     />
+                  ) : pdfUrl && isWordFile(contract?.file_path) ? (
+                    <div className="flex items-center justify-center h-[400px] bg-muted/10">
+                      <div className="text-center px-6 max-w-md">
+                        <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                          <FileType className="h-10 w-10 text-primary" />
+                        </div>
+                        <p className="text-foreground font-semibold text-lg mb-2">Documento Word</p>
+                        <p className="text-sm text-muted-foreground mb-6">
+                          Este documento está no formato Word (.docx). Clique no botão abaixo para baixar e visualizar o conteúdo completo.
+                        </p>
+                        <Button 
+                          onClick={() => window.open(pdfUrl, '_blank')}
+                          className="btn-gold gap-2"
+                          size="lg"
+                        >
+                          <Download className="h-5 w-5" />
+                          Baixar Documento Word
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-4">
+                          Após ler o documento, volte aqui para confirmar e assinar.
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] bg-muted/10">
                       <div className="text-center px-4">

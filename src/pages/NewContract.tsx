@@ -13,12 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Trash2, Upload, Scale, CalendarIcon, Loader2, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, Scale, CalendarIcon, Loader2, Sparkles, FileText, CheckCircle2, FileType } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { extractTextFromPDF } from '@/lib/pdf-utils';
+import { extractTextFromDocument, isValidDocumentType, getDocumentType } from '@/lib/document-utils';
 
 const signatorySchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório'),
@@ -64,8 +64,8 @@ export default function NewContract() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (selectedFile.type !== 'application/pdf') {
-      toast.error('Apenas arquivos PDF são permitidos');
+    if (!isValidDocumentType(selectedFile)) {
+      toast.error('Apenas arquivos PDF ou Word (.docx) são permitidos');
       return;
     }
     if (selectedFile.size > 10 * 1024 * 1024) {
@@ -78,19 +78,20 @@ export default function NewContract() {
 
   const analyzeContract = async () => {
     if (!file) {
-      toast.error('Selecione um arquivo PDF primeiro');
+      toast.error('Selecione um arquivo primeiro');
       return;
     }
 
     setIsAnalyzing(true);
+    const docType = getDocumentType(file);
 
     try {
-      // Extract text from PDF
-      toast.info('Extraindo texto do PDF...');
-      const pdfText = await extractTextFromPDF(file);
+      // Extract text from document
+      toast.info(docType === 'word' ? 'Extraindo texto do Word...' : 'Extraindo texto do PDF...');
+      const documentText = await extractTextFromDocument(file);
 
-      if (!pdfText || pdfText.length < 50) {
-        toast.error('Não foi possível extrair texto suficiente do PDF. O documento pode ser uma imagem.');
+      if (!documentText || documentText.length < 50) {
+        toast.error('Não foi possível extrair texto suficiente do documento. O arquivo pode estar vazio ou ser uma imagem.');
         setIsAnalyzing(false);
         return;
       }
@@ -98,7 +99,7 @@ export default function NewContract() {
       // Send to AI for analysis
       toast.info('Analisando contrato com IA...');
       const { data, error } = await supabase.functions.invoke('analyze-contract', {
-        body: { pdfText },
+        body: { pdfText: documentText },
       });
 
       if (error) {
@@ -134,7 +135,7 @@ export default function NewContract() {
 
   const skipAnalysis = () => {
     if (!file) {
-      toast.error('Selecione um arquivo PDF primeiro');
+      toast.error('Selecione um arquivo primeiro');
       return;
     }
     setStep('form');
@@ -149,7 +150,7 @@ export default function NewContract() {
 
   const onSubmit = async (data: ContractForm) => {
     if (!user || !file) {
-      toast.error('Arquivo PDF é obrigatório');
+      toast.error('Arquivo é obrigatório');
       return;
     }
 
@@ -275,19 +276,19 @@ export default function NewContract() {
                 Upload do Contrato
               </CardTitle>
               <CardDescription>
-                Faça upload do PDF e nossa IA irá preencher automaticamente os campos
+                Faça upload do documento e nossa IA irá preencher automaticamente os campos
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="border-2 border-dashed border-primary/30 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={handleFileChange}
                   className="hidden"
-                  id="pdf-upload"
+                  id="document-upload"
                 />
-                <label htmlFor="pdf-upload" className="cursor-pointer">
+                <label htmlFor="document-upload" className="cursor-pointer">
                   {file ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-center gap-2 text-primary">
@@ -306,10 +307,10 @@ export default function NewContract() {
                       <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
                       <div>
                         <p className="font-medium">Clique para fazer upload</p>
-                        <p className="text-sm text-muted-foreground">ou arraste um PDF aqui</p>
+                        <p className="text-sm text-muted-foreground">ou arraste um arquivo aqui</p>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        PDF até 10MB
+                        PDF ou Word (.docx) até 10MB
                       </p>
                     </div>
                   )}
