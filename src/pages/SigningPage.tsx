@@ -108,23 +108,40 @@ export default function SigningPage() {
     }
   }, [contract?.file_path]);
 
-  const loadPdfDocument = async () => {
+  const loadPdfDocument = async (retryCount = 0) => {
     if (!contract?.file_path || !token) return;
     
     setLoadingPdf(true);
     try {
+      console.log(`Loading document (attempt ${retryCount + 1})...`);
+      
       // Use edge function to get signed URL (bypasses RLS for signatories)
       const { data, error } = await supabase.functions.invoke('get-signed-document-url', {
         body: { accessToken: token }
       });
       
       if (!error && data?.signedUrl) {
+        console.log('Document URL obtained successfully');
         setPdfUrl(data.signedUrl);
       } else {
         console.error('Error getting signed URL:', error || data?.error);
+        // Retry up to 3 times with exponential backoff
+        if (retryCount < 3) {
+          const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          console.log(`Retrying in ${delay}ms...`);
+          setTimeout(() => loadPdfDocument(retryCount + 1), delay);
+          return; // Don't set loadingPdf to false yet
+        }
       }
     } catch (err) {
       console.error('Error loading document:', err);
+      // Retry on network errors
+      if (retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Retrying after error in ${delay}ms...`);
+        setTimeout(() => loadPdfDocument(retryCount + 1), delay);
+        return;
+      }
     }
     setLoadingPdf(false);
   };
