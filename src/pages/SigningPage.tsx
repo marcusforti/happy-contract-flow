@@ -72,6 +72,7 @@ export default function SigningPage() {
   const [hasReadDocument, setHasReadDocument] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfLoadError, setPdfLoadError] = useState(false);
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [termsAcceptedLogged, setTermsAcceptedLogged] = useState(false);
 
@@ -112,6 +113,8 @@ export default function SigningPage() {
     if (!contract?.file_path || !token) return;
     
     setLoadingPdf(true);
+    setPdfLoadError(false);
+    
     try {
       console.log(`Loading document (attempt ${retryCount + 1})...`);
       
@@ -123,6 +126,8 @@ export default function SigningPage() {
       if (!error && data?.signedUrl) {
         console.log('Document URL obtained successfully');
         setPdfUrl(data.signedUrl);
+        setPdfLoadError(false);
+        setLoadingPdf(false);
       } else {
         console.error('Error getting signed URL:', error || data?.error);
         // Retry up to 3 times with exponential backoff
@@ -130,7 +135,9 @@ export default function SigningPage() {
           const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
           console.log(`Retrying in ${delay}ms...`);
           setTimeout(() => loadPdfDocument(retryCount + 1), delay);
-          return; // Don't set loadingPdf to false yet
+        } else {
+          setPdfLoadError(true);
+          setLoadingPdf(false);
         }
       }
     } catch (err) {
@@ -140,10 +147,11 @@ export default function SigningPage() {
         const delay = Math.pow(2, retryCount) * 1000;
         console.log(`Retrying after error in ${delay}ms...`);
         setTimeout(() => loadPdfDocument(retryCount + 1), delay);
-        return;
+      } else {
+        setPdfLoadError(true);
+        setLoadingPdf(false);
       }
     }
-    setLoadingPdf(false);
   };
 
   const fetchSigningData = async () => {
@@ -619,19 +627,32 @@ export default function SigningPage() {
                         </p>
                       </div>
                     </div>
-                  ) : (
+                  ) : pdfLoadError || (!pdfUrl && !loadingPdf) ? (
                     <div className="flex items-center justify-center h-[300px] bg-muted/10">
                       <div className="text-center px-4">
                         <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <FileText className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground font-medium mb-1">Documento não disponível</p>
-                        <p className="text-xs text-muted-foreground">
-                          Verifique o anexo do email ou entre em contato com o remetente
+                        <p className="text-muted-foreground font-medium mb-1">
+                          {pdfLoadError ? 'Erro ao carregar documento' : 'Documento não disponível'}
                         </p>
+                        <p className="text-xs text-muted-foreground mb-4">
+                          {pdfLoadError 
+                            ? 'Houve um problema ao carregar. Tente novamente.' 
+                            : 'Verifique o anexo do email ou entre em contato com o remetente'}
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => loadPdfDocument(0)}
+                          className="gap-2"
+                        >
+                          <Loader2 className="h-4 w-4" />
+                          Tentar novamente
+                        </Button>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </CardContent>
               </Card>
 
