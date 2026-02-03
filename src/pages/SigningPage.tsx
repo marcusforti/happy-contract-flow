@@ -109,19 +109,22 @@ export default function SigningPage() {
   }, [contract?.file_path]);
 
   const loadPdfDocument = async () => {
-    if (!contract?.file_path) return;
+    if (!contract?.file_path || !token) return;
     
     setLoadingPdf(true);
     try {
-      const { data } = await supabase.storage
-        .from('contracts')
-        .createSignedUrl(contract.file_path, 3600);
+      // Use edge function to get signed URL (bypasses RLS for signatories)
+      const { data, error } = await supabase.functions.invoke('get-signed-document-url', {
+        body: { accessToken: token }
+      });
       
-      if (data?.signedUrl) {
+      if (!error && data?.signedUrl) {
         setPdfUrl(data.signedUrl);
+      } else {
+        console.error('Error getting signed URL:', error || data?.error);
       }
     } catch (err) {
-      console.error('Error loading PDF:', err);
+      console.error('Error loading document:', err);
     }
     setLoadingPdf(false);
   };
