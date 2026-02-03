@@ -25,7 +25,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { extractTextFromPDF } from '@/lib/pdf-utils';
+import { extractTextFromDocument, isValidDocumentType, getDocumentType } from '@/lib/document-utils';
 
 interface Contract {
   id: string;
@@ -203,8 +203,11 @@ export default function ContractDetails() {
               pdfFileName = contract.file_path.split('/').pop() || `${contract.title}.pdf`;
 
               // Extract text for AI email generation
-              const pdfFile = new File([pdfBlob], 'contract.pdf', { type: 'application/pdf' });
-              const extracted = await extractTextFromPDF(pdfFile);
+              const fileExt = contract.file_path.split('.').pop()?.toLowerCase();
+              const mimeType = fileExt === 'pdf' ? 'application/pdf' : 
+                               (fileExt === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream');
+              const docFile = new File([pdfBlob], pdfFileName, { type: mimeType });
+              const extracted = await extractTextFromDocument(docFile);
               if (extracted && extracted.length >= 50) {
                 pdfText = extracted;
                 toast.info('Gerando email personalizado com IA...');
@@ -794,16 +797,20 @@ export default function ContractDetails() {
         throw new Error('Não foi possível acessar o documento');
       }
 
-      // Fetch and extract PDF text
+      // Fetch and extract document text
       const response = await fetch(signedUrlData.signedUrl);
       if (!response.ok) throw new Error('Erro ao baixar documento');
       
-      const pdfBlob = await response.blob();
-      const pdfFile = new File([pdfBlob], 'contract.pdf', { type: 'application/pdf' });
-      const pdfText = await extractTextFromPDF(pdfFile);
+      const fileBlob = await response.blob();
+      const fileName = contract.file_path?.split('/').pop() || 'document';
+      const fileExt = fileName.split('.').pop()?.toLowerCase();
+      const mimeType = fileExt === 'pdf' ? 'application/pdf' : 
+                       (fileExt === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream');
+      const docFile = new File([fileBlob], fileName, { type: mimeType });
+      const pdfText = await extractTextFromDocument(docFile);
 
       if (!pdfText || pdfText.length < 50) {
-        throw new Error('Não foi possível extrair texto do PDF');
+        throw new Error('Não foi possível extrair texto do documento');
       }
 
       // Send emails to all pending signatories with AI-generated body
