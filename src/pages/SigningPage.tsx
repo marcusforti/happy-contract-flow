@@ -38,6 +38,7 @@ interface Signatory {
   id: string;
   name: string;
   email: string;
+  cpf: string | null;
   signed_at: string | null;
   contract_id: string;
 }
@@ -213,6 +214,7 @@ export default function SigningPage() {
       metadata: { 
         signatory_name: signatoryData.name,
         signatory_email: signatoryData.email,
+        signatory_cpf: signatoryData.cpf || null,
         geolocation: clientInfo?.geolocation || null,
       },
     });
@@ -237,6 +239,7 @@ export default function SigningPage() {
         metadata: { 
           signatory_name: signatory.name,
           signatory_email: signatory.email,
+          signatory_cpf: signatory.cpf || null,
           accepted_at: new Date().toISOString(),
           geolocation: clientInfo?.geolocation || null,
         },
@@ -333,6 +336,7 @@ export default function SigningPage() {
         metadata: { 
           signatory_name: signatory.name,
           signatory_email: signatory.email,
+          signatory_cpf: signatory.cpf || null,
           signature_type: signatureType,
           geolocation: clientInfo?.geolocation || null,
         },

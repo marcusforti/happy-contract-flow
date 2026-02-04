@@ -23,6 +23,7 @@ import { extractTextFromDocument, isValidDocumentType, getDocumentType } from '@
 const signatorySchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório'),
   email: z.string().email('Email inválido'),
+  cpf: z.string().optional(),
 });
 
 const contractSchema = z.object({
@@ -51,7 +52,7 @@ export default function NewContract() {
       title: '',
       description: '',
       signingOrder: 'parallel',
-      signatories: [{ name: '', email: '' }],
+      signatories: [{ name: '', email: '', cpf: '' }],
     },
   });
 
@@ -134,6 +135,7 @@ export default function NewContract() {
         replace(extracted.signatories.map((s: any) => ({
           name: s.name || '',
           email: s.email || '',
+          cpf: s.cpf || '',
         })));
       }
 
@@ -224,6 +226,7 @@ export default function NewContract() {
           contract_id: contract.id,
           name: s.name,
           email: s.email,
+          cpf: s.cpf || null,
           signing_order: data.signingOrder === 'sequential' ? index + 1 : 1,
         }));
 
@@ -586,7 +589,7 @@ export default function NewContract() {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium shrink-0 gold-border">
                         {index + 1}
                       </div>
-                      <div className="flex-1 grid gap-4 sm:grid-cols-2">
+                      <div className="flex-1 grid gap-4 sm:grid-cols-3">
                         <FormField
                           control={form.control}
                           name={`signatories.${index}.name`}
@@ -613,6 +616,19 @@ export default function NewContract() {
                             </FormItem>
                           )}
                         />
+                        <FormField
+                          control={form.control}
+                          name={`signatories.${index}.cpf`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>CPF</FormLabel>
+                              <FormControl>
+                                <Input placeholder="000.000.000-00" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
                       {fields.length > 1 && (
                         <Button
@@ -631,7 +647,7 @@ export default function NewContract() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => append({ name: '', email: '' })}
+                    onClick={() => append({ name: '', email: '', cpf: '' })}
                     className="w-full gold-border"
                   >
                     <Plus className="h-4 w-4 mr-2" />
