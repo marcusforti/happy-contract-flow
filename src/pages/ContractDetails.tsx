@@ -57,6 +57,7 @@ interface AuditLog {
   created_at: string;
   metadata: any;
   signatory_id: string | null;
+  user_id: string | null;
 }
 
 const statusConfig = {
@@ -691,16 +692,34 @@ export default function ContractDetails() {
 
     <div class="section">
       <div class="section-title">📋 Trilha de Auditoria Completa</div>
-      ${auditLogs.slice(0, 30).map(log => `
-      <div class="audit-item">
-        <div class="audit-date">${formatDateTime(log.created_at)}</div>
-        <div class="audit-action">
-          ${actionLabels[log.action] || log.action}
-          ${log.ip_address && log.ip_address !== 'N/A' ? `<span style="color: #999; font-size: 11px;"> (IP: ${log.ip_address})</span>` : ''}
-          ${log.metadata?.geolocation?.city ? `<span style="color: #999; font-size: 11px;"> - ${log.metadata.geolocation.city}, ${log.metadata.geolocation.country || ''}</span>` : ''}
+      ${auditLogs.slice(0, 30).map(log => {
+        // Get signatory info from metadata or signatories list
+        const signatoryInfo = log.metadata?.signatory_name && log.metadata?.signatory_email
+          ? { name: log.metadata.signatory_name, email: log.metadata.signatory_email }
+          : log.signatory_id 
+            ? signatories.find(s => s.id === log.signatory_id)
+            : null;
+        
+        const actorDisplay = signatoryInfo 
+          ? `<strong style="color: #ca8a04;">${signatoryInfo.name}</strong> <span style="color: #888;">(${signatoryInfo.email})</span>`
+          : log.user_id 
+            ? '<strong style="color: #ca8a04;">Proprietário do contrato</strong>'
+            : '';
+
+        return `
+      <div class="audit-item" style="flex-direction: column; gap: 4px;">
+        <div style="display: flex; gap: 15px; align-items: flex-start;">
+          <div class="audit-date">${formatDateTime(log.created_at)}</div>
+          <div class="audit-action">
+            ${actionLabels[log.action] || log.action}
+            ${log.ip_address && log.ip_address !== 'N/A' ? `<span style="color: #999; font-size: 11px;"> (IP: ${log.ip_address})</span>` : ''}
+            ${log.metadata?.geolocation?.city ? `<span style="color: #999; font-size: 11px;"> - ${log.metadata.geolocation.city}, ${log.metadata.geolocation.country || ''}</span>` : ''}
+          </div>
         </div>
+        ${actorDisplay ? `<div style="margin-left: 155px; font-size: 12px;">👤 ${actorDisplay}</div>` : ''}
       </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
 
     <div class="section">
