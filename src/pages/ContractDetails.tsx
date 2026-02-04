@@ -43,6 +43,7 @@ interface Signatory {
   id: string;
   name: string;
   email: string;
+  cpf: string | null;
   signing_order: number;
   access_token: string;
   signed_at: string | null;
@@ -415,6 +416,7 @@ export default function ContractDetails() {
         return {
           name: signatory.name,
           email: signatory.email,
+          cpf: signatory.cpf || null,
           signed_at: signatory.signed_at,
           ip_address: signature?.ip_address || 'N/A',
           user_agent: signature?.user_agent || 'N/A',
@@ -661,8 +663,9 @@ export default function ContractDetails() {
           ${sig.otp_verified_at ? '<span class="badge" style="background: #166534;">✓ Email Verificado</span>' : ''}
           ${sig.terms_accepted_at ? '<span class="badge" style="background: #1e40af;">✓ Termos Aceitos</span>' : ''}
         </div>
-        <div class="signatory-details" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="signatory-details" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
           <div><span>E-mail:</span> <strong>${sig.email}</strong></div>
+          <div><span>CPF:</span> <strong>${sig.cpf || 'Não informado'}</strong></div>
           <div><span>Assinado em:</span> <strong>${sig.signed_at ? formatDateTime(sig.signed_at) : 'Pendente'}</strong></div>
           <div><span>Tipo de Assinatura:</span> <strong>${sig.signature_type === 'draw' ? 'Desenhada' : sig.signature_type === 'type' ? 'Digitada' : sig.signature_type}</strong></div>
         </div>
@@ -695,13 +698,14 @@ export default function ContractDetails() {
       ${auditLogs.slice(0, 30).map(log => {
         // Get signatory info from metadata or signatories list
         const signatoryInfo = log.metadata?.signatory_name && log.metadata?.signatory_email
-          ? { name: log.metadata.signatory_name, email: log.metadata.signatory_email }
+          ? { name: log.metadata.signatory_name, email: log.metadata.signatory_email, cpf: log.metadata.signatory_cpf || null }
           : log.signatory_id 
             ? signatories.find(s => s.id === log.signatory_id)
             : null;
         
+        const cpfDisplay = signatoryInfo?.cpf ? ` - CPF: ${signatoryInfo.cpf}` : '';
         const actorDisplay = signatoryInfo 
-          ? `<strong style="color: #ca8a04;">${signatoryInfo.name}</strong> <span style="color: #888;">(${signatoryInfo.email})</span>`
+          ? `<strong style="color: #ca8a04;">${signatoryInfo.name}</strong> <span style="color: #888;">(${signatoryInfo.email}${cpfDisplay})</span>`
           : log.user_id 
             ? '<strong style="color: #ca8a04;">Proprietário do contrato</strong>'
             : '';
@@ -731,6 +735,7 @@ export default function ContractDetails() {
         <br><br>
         <strong style="color: #ca8a04;">Evidências técnicas capturadas:</strong>
         <ul style="margin-top: 8px; padding-left: 20px;">
+          <li>Identificação do signatário (Nome, E-mail e CPF)</li>
           <li>Verificação de email via código OTP (One-Time Password)</li>
           <li>Aceite explícito dos termos antes da assinatura</li>
           <li>Endereço IP real do signatário</li>
