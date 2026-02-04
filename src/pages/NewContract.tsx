@@ -43,7 +43,7 @@ export default function NewContract() {
   const [step, setStep] = useState<Step>('upload');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
   const form = useForm<ContractForm>({
     resolver: zodResolver(contractSchema),
@@ -60,35 +60,49 @@ export default function NewContract() {
     name: 'signatories',
   });
 
+  const isBatchMode = files.length > 1;
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    if (!isValidDocumentType(selectedFile)) {
-      toast.error('Apenas arquivos PDF ou Word (.docx) são permitidos');
-      return;
-    }
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error('Arquivo deve ter no máximo 10MB');
-      return;
+    const validFiles: File[] = [];
+    for (const file of selectedFiles) {
+      if (!isValidDocumentType(file)) {
+        toast.error(`${file.name}: Apenas arquivos PDF ou Word (.docx) são permitidos`);
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name}: Arquivo deve ter no máximo 10MB`);
+        continue;
+      }
+      validFiles.push(file);
     }
 
-    setFile(selectedFile);
+    if (validFiles.length > 0) {
+      setFiles(prev => [...prev, ...validFiles]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const analyzeContract = async () => {
-    if (!file) {
+    if (files.length === 0) {
       toast.error('Selecione um arquivo primeiro');
       return;
     }
 
+    // Only analyze the first file
+    const firstFile = files[0];
     setIsAnalyzing(true);
-    const docType = getDocumentType(file);
+    const docType = getDocumentType(firstFile);
 
     try {
       // Extract text from document
       toast.info(docType === 'word' ? 'Extraindo texto do Word...' : 'Extraindo texto do PDF...');
-      const documentText = await extractTextFromDocument(file);
+      const documentText = await extractTextFromDocument(firstFile);
 
       if (!documentText || documentText.length < 50) {
         toast.error('Não foi possível extrair texto suficiente do documento. O arquivo pode estar vazio ou ser uma imagem.');
@@ -134,7 +148,7 @@ export default function NewContract() {
   };
 
   const skipAnalysis = () => {
-    if (!file) {
+    if (files.length === 0) {
       toast.error('Selecione um arquivo primeiro');
       return;
     }
@@ -149,7 +163,7 @@ export default function NewContract() {
   };
 
   const onSubmit = async (data: ContractForm) => {
-    if (!user || !file) {
+    if (!user || files.length === 0) {
       toast.error('Arquivo é obrigatório');
       return;
     }
@@ -157,73 +171,95 @@ export default function NewContract() {
     setIsSubmitting(true);
 
     try {
-      // Upload PDF
-      const documentHash = await computeFileHash(file);
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('contracts')
-        .upload(filePath, file);
+      const createdContractIds: string[] = [];
 
-      if (uploadError) {
-        toast.error('Erro ao fazer upload do arquivo');
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isFirstFile = i === 0;
+        
+        // Upload file
+        const documentHash = await computeFileHash(file);
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${user.id}/${Date.now()}-${i}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('contracts')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          toast.error(`Erro ao fazer upload do arquivo ${file.name}`);
+          continue;
+        }
+
+        // For batch mode, use filename as title (except first one which uses form data)
+        const contractTitle = isBatchMode && !isFirstFile 
+          ? file.name.replace(/\.[^/.]+$/, '') // Remove extension
+          : data.title;
+
+        // Create contract
+        const { data: contract, error: contractError } = await supabase
+          .from('contracts')
+          .insert({
+            owner_id: user.id,
+            title: contractTitle,
+            description: isFirstFile ? (data.description || null) : null,
+            file_path: filePath,
+            document_hash: documentHash,
+            status: 'draft',
+            signing_order: data.signingOrder,
+            expires_at: data.expiresAt?.toISOString() || null,
+          })
+          .select()
+          .single();
+
+        if (contractError || !contract) {
+          toast.error(`Erro ao criar contrato ${file.name}`);
+          continue;
+        }
+
+        createdContractIds.push(contract.id);
+
+        // Add signatories
+        const signatoriesToInsert = data.signatories.map((s, index) => ({
+          contract_id: contract.id,
+          name: s.name,
+          email: s.email,
+          signing_order: data.signingOrder === 'sequential' ? index + 1 : 1,
+        }));
+
+        const { error: signatoryError } = await supabase
+          .from('contract_signatories')
+          .insert(signatoriesToInsert);
+
+        if (signatoryError) {
+          toast.error(`Erro ao adicionar signatários para ${file.name}`);
+          continue;
+        }
+
+        // Create audit log
+        await supabase.from('audit_logs').insert({
+          contract_id: contract.id,
+          user_id: user.id,
+          action: 'created',
+          ip_address: 'N/A',
+          user_agent: navigator.userAgent,
+          metadata: { signatories: data.signatories.length, batch_upload: isBatchMode },
+        });
+      }
+
+      if (createdContractIds.length === 0) {
+        toast.error('Nenhum contrato foi criado');
         setIsSubmitting(false);
         return;
       }
 
-      // Create contract
-      const { data: contract, error: contractError } = await supabase
-        .from('contracts')
-        .insert({
-          owner_id: user.id,
-          title: data.title,
-          description: data.description || null,
-          file_path: filePath,
-          document_hash: documentHash,
-          status: 'draft',
-          signing_order: data.signingOrder,
-          expires_at: data.expiresAt?.toISOString() || null,
-        })
-        .select()
-        .single();
-
-      if (contractError || !contract) {
-        toast.error('Erro ao criar contrato');
-        setIsSubmitting(false);
-        return;
+      if (createdContractIds.length === 1) {
+        toast.success('Contrato criado com sucesso!');
+        navigate(`/contracts/${createdContractIds[0]}`);
+      } else {
+        toast.success(`${createdContractIds.length} contratos criados com sucesso!`);
+        navigate('/dashboard');
       }
-
-      // Add signatories
-      const signatoriesToInsert = data.signatories.map((s, index) => ({
-        contract_id: contract.id,
-        name: s.name,
-        email: s.email,
-        signing_order: data.signingOrder === 'sequential' ? index + 1 : 1,
-      }));
-
-      const { error: signatoryError } = await supabase
-        .from('contract_signatories')
-        .insert(signatoriesToInsert);
-
-      if (signatoryError) {
-        toast.error('Erro ao adicionar signatários');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Create audit log
-      await supabase.from('audit_logs').insert({
-        contract_id: contract.id,
-        user_id: user.id,
-        action: 'created',
-        ip_address: 'N/A',
-        user_agent: navigator.userAgent,
-        metadata: { signatories: data.signatories.length },
-      });
-
-      toast.success('Contrato criado com sucesso!');
-      navigate(`/contracts/${contract.id}`);
     } catch (error) {
       toast.error('Erro inesperado ao criar contrato');
     }
@@ -287,64 +323,97 @@ export default function NewContract() {
                   onChange={handleFileChange}
                   className="hidden"
                   id="document-upload"
+                  multiple
                 />
                 <label htmlFor="document-upload" className="cursor-pointer">
-                  {file ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-2 text-primary">
-                        <CheckCircle2 className="h-8 w-8" />
-                      </div>
-                      <p className="font-medium text-primary">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Clique para trocar o arquivo
-                      </p>
+                  <div className="space-y-4">
+                    <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">Clique para fazer upload</p>
+                      <p className="text-sm text-muted-foreground">ou arraste arquivos aqui</p>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Clique para fazer upload</p>
-                        <p className="text-sm text-muted-foreground">ou arraste um arquivo aqui</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        PDF ou Word (.docx) até 10MB
-                      </p>
-                    </div>
-                  )}
+                    <p className="text-xs text-muted-foreground">
+                      PDF ou Word (.docx) até 10MB cada • Suporta múltiplos arquivos
+                    </p>
+                  </div>
                 </label>
               </div>
 
-              {file && (
+              {/* List of selected files */}
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {files.length} arquivo(s) selecionado(s)
+                    {isBatchMode && <span className="text-primary ml-2">(Modo em lote)</span>}
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {files.map((file, index) => (
+                      <div key={index} className="flex items-center gap-3 p-2 bg-primary/5 rounded-lg border border-primary/20">
+                        <FileType className="h-4 w-4 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                          onClick={() => removeFile(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {files.length > 0 && (
                 <div className="space-y-3">
-                  <Button 
-                    onClick={analyzeContract} 
-                    className="w-full btn-gold" 
-                    size="lg"
-                    disabled={isAnalyzing}
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Analisando com IA...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Analisar com IA e preencher automaticamente
-                      </>
-                    )}
-                  </Button>
+                  {!isBatchMode && (
+                    <Button 
+                      onClick={analyzeContract} 
+                      className="w-full btn-gold" 
+                      size="lg"
+                      disabled={isAnalyzing}
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Analisando com IA...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Analisar com IA e preencher automaticamente
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button 
                     onClick={skipAnalysis} 
-                    variant="outline" 
-                    className="w-full gold-border"
+                    variant={isBatchMode ? "default" : "outline"} 
+                    className={isBatchMode ? "w-full btn-gold" : "w-full gold-border"}
+                    size={isBatchMode ? "lg" : "default"}
                     disabled={isAnalyzing}
                   >
-                    Pular e preencher manualmente
+                    {isBatchMode ? (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Continuar com {files.length} arquivos
+                      </>
+                    ) : (
+                      'Pular e preencher manualmente'
+                    )}
                   </Button>
+                  {isBatchMode && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      No modo em lote, cada arquivo será um contrato separado com os mesmos signatários
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -354,29 +423,37 @@ export default function NewContract() {
         {step === 'form' && (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Selected file indicator */}
-              {file && (
+              {/* Selected files indicator */}
+              {files.length > 0 && (
                 <Card className="bg-primary/5 border-primary/20">
-                  <CardContent className="flex items-center gap-3 py-3">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
+                  <CardContent className="py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <span className="text-sm font-medium">
+                          {files.length === 1 ? files[0].name : `${files.length} arquivos selecionados`}
+                        </span>
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                          setStep('upload');
+                          setFiles([]);
+                          form.reset();
+                        }}
+                      >
+                        Trocar
+                      </Button>
                     </div>
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => {
-                        setStep('upload');
-                        setFile(null);
-                        form.reset();
-                      }}
-                    >
-                      Trocar
-                    </Button>
+                    {files.length > 1 && (
+                      <div className="text-xs text-muted-foreground space-y-1 pl-7">
+                        {files.map((f, i) => (
+                          <p key={i}>{f.name} ({(f.size / 1024 / 1024).toFixed(2)} MB)</p>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
