@@ -202,7 +202,7 @@ export default function SigningPage() {
     setContract(contractData);
     setLoading(false);
     
-    // Log viewed event
+    // Log viewed event with signatory identity
     const ip = clientInfo?.ip_address || 'N/A';
     await supabase.from('audit_logs').insert({
       contract_id: contractData.id,
@@ -210,7 +210,11 @@ export default function SigningPage() {
       action: 'viewed',
       ip_address: ip,
       user_agent: navigator.userAgent,
-      metadata: clientInfo?.geolocation ? { geolocation: clientInfo.geolocation } : null,
+      metadata: { 
+        signatory_name: signatoryData.name,
+        signatory_email: signatoryData.email,
+        geolocation: clientInfo?.geolocation || null,
+      },
     });
   };
 
@@ -231,6 +235,8 @@ export default function SigningPage() {
         ip_address: getIpAddress(),
         user_agent: navigator.userAgent,
         metadata: { 
+          signatory_name: signatory.name,
+          signatory_email: signatory.email,
           accepted_at: new Date().toISOString(),
           geolocation: clientInfo?.geolocation || null,
         },
@@ -325,6 +331,8 @@ export default function SigningPage() {
         ip_address: getIpAddress(),
         user_agent: navigator.userAgent,
         metadata: { 
+          signatory_name: signatory.name,
+          signatory_email: signatory.email,
           signature_type: signatureType,
           geolocation: clientInfo?.geolocation || null,
         },
@@ -379,10 +387,16 @@ export default function SigningPage() {
       if (isCompleted) {
         await supabase.from('audit_logs').insert({
           contract_id: contract.id,
+          signatory_id: signatory.id,
           action: 'completed',
           ip_address: getIpAddress(),
           user_agent: navigator.userAgent,
-          metadata: { geolocation: clientInfo?.geolocation || null },
+          metadata: { 
+            signatory_name: signatory.name,
+            signatory_email: signatory.email,
+            completed_by_last_signature: true,
+            geolocation: clientInfo?.geolocation || null,
+          },
         });
 
         try {
